@@ -1,50 +1,162 @@
-# Welcome to your Expo app 👋
-
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 1. Clone Repository
 
 ```bash
-npm run reset-project
+git clone <url-repository-mobile>
+cd <repository-mobile>
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+````
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 2. Install Dependency
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Jalankan perintah berikut:
 
-## Join the community
+```bash
+npm install
+```
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 3. Buat File Environment
+
+Buat file `.env` di root project.
+
+Contoh struktur:
+
+```text
+project-mobile/
+├── .env
+├── package.json
+├── src/
+└── ...
+```
+
+Isi file `.env`:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://IP_LAPTOP_ANDA:8000/api
+```
+
+Contoh:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
+```
+
+URL wajib menggunakan `http://` atau `https://`.
+
+Benar:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
+```
+
+Salah:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=192.168.x.x:8000/api
+```
+
+---
+
+## 4. Jalankan Backend Laravel
+
+Sebelum menjalankan aplikasi mobile, jalankan backend dari project web terlebih dahulu.
+
+Pastikan container backend dan nginx berjalan.
+
+Cek dari browser laptop:
+
+```text
+http://localhost:8000/api/profile
+```
+
+Jika muncul:
+
+```text
+Unauthenticated
+```
+
+berarti backend sudah berjalan.
+
+---
+
+## 5. Cek IP Laptop
+
+Cari IP laptop yang digunakan pada jaringan Wi-Fi.
+
+Di Windows, jalankan:
+
+```bash
+ipconfig
+```
+
+Cari bagian adapter Wi-Fi, lalu lihat nilai:
+
+```text
+IPv4 Address
+```
+
+Contoh:
+
+```text
+192.168.x.x
+```
+
+IP tersebut digunakan pada file `.env`:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
+```
+
+---
+
+## 6. Cek Koneksi Backend dari HP
+
+Pastikan HP dan laptop berada di jaringan yang sama.
+
+Buka browser di HP, lalu akses:
+
+```text
+http://IP_LAPTOP_ANDA:8000/api/profile
+```
+
+Contoh:
+
+```text
+http://192.168.x.x:8000/api/profile
+```
+
+Jika muncul:
+
+```text
+Unauthenticated
+```
+
+berarti HP sudah bisa mengakses backend.
+
+Jika tidak bisa diakses, periksa:
+
+- IP laptop sudah benar
+- HP dan laptop berada di jaringan yang sama
+- Backend Docker sudah berjalan
+- Port `8000` tidak diblokir firewall
+- URL di `.env` sudah benar
+- Network laptop sebaiknya menggunakan mode Private jika berada di jaringan terpercaya
+
+---
+
+## 7. Jalankan Project Mobile
+
+Jalankan Expo:
+
+```bash
+npx expo start -c
+```
+
+Scan QR code menggunakan aplikasi **Expo Go** di HP Android.
+
+---
+````
