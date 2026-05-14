@@ -12,7 +12,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     return (
-        <View className="flex-1">
+        <View className="flex-1 bg-secondary">
             <AppNavbar onOpenMenu={() => setIsMenuOpen(true)} />
 
             <View className="flex-1">{children}</View>

@@ -40,9 +40,6 @@ export default function LoginScreen() {
     async function handleLogin() {
         setErrorMessage("");
 
-        console.log(email, password);
-
-
         if (!email.trim() || !password.trim()) {
             setErrorMessage("Email dan password wajib diisi.");
             return;
@@ -74,7 +71,24 @@ export default function LoginScreen() {
             console.log("LOGIN ERROR BASE URL:", error?.config?.baseURL);
             console.log("LOGIN ERROR URL:", error?.config?.url);
 
-            setErrorMessage("Tidak dapat terhubung ke server");
+            const status = error?.response?.status;
+
+            if (status === 401 || status === 422) {
+                setErrorMessage("Email atau password salah.");
+                return;
+            }
+
+            if (status === 500) {
+                setErrorMessage("Terjadi kesalahan pada server.");
+                return;
+            }
+
+            if (error?.message === "Network Error") {
+                setErrorMessage("Tidak dapat terhubung ke server.");
+                return;
+            }
+
+            setErrorMessage("Login gagal. Silakan coba lagi.");
         } finally {
             setIsSubmitting(false);
         }
@@ -95,13 +109,9 @@ export default function LoginScreen() {
                 keyboardShouldPersistTaps="handled"
             >
                 <View className="rounded-2xl bg-white p-6 shadow-lg elevation-lg">
-
-
                     <Text className="mb-2 text-center text-4xl font-extrabold text-dark">
                         Login
                     </Text>
-
-
                     {errorMessage ? (
                         <View className="mb-4 rounded-xl border border-danger bg-red-100 p-3">
                             <Text className="text-center text-sm text-danger">
@@ -109,10 +119,8 @@ export default function LoginScreen() {
                             </Text>
                         </View>
                     ) : null}
-
                     <View className="mb-4">
                         <Text className="mb-2 text-sm font-semibold text-dark">Email</Text>
-
                         <TextInput
                             value={email}
                             onChangeText={setEmail}
@@ -124,12 +132,10 @@ export default function LoginScreen() {
                             placeholderTextColor="#9ca3af"
                         />
                     </View>
-
                     <View className="mb-4">
                         <Text className="mb-2 text-sm font-semibold text-dark">
                             Password
                         </Text>
-
                         <TextInput
                             value={password}
                             onChangeText={setPassword}
@@ -141,7 +147,6 @@ export default function LoginScreen() {
                             placeholderTextColor="#9ca3af"
                         />
                     </View>
-
                     <Pressable
                         onPress={handleLogin}
                         disabled={isSubmitting}
