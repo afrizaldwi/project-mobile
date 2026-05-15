@@ -1,15 +1,42 @@
 ## 1. Clone Repository
 
+Clone repository mobile:
+
 ```bash
 git clone <url-repository-mobile>
 cd <repository-mobile>
 ```
 
-````
+---
+
+## 2. Pindah ke Branch Develop
+
+Untuk development, gunakan branch `develop`.
+
+Jalankan:
+
+```bash
+git checkout develop
+```
+
+Pastikan branch aktif sudah benar:
+
+```bash
+git branch -a
+```
+
+Branch aktif ditandai dengan simbol `*`.
+
+Contoh:
+
+```text
+* develop
+  main
+```
 
 ---
 
-## 2. Install Dependency
+## 3. Install Dependency
 
 Jalankan perintah berikut:
 
@@ -19,7 +46,7 @@ npm install
 
 ---
 
-## 3. Buat File Environment
+## 4. Buat File Environment
 
 Buat file `.env` di root project.
 
@@ -61,11 +88,11 @@ EXPO_PUBLIC_API_BASE_URL=192.168.x.x:8000/api
 
 ---
 
-## 4. Jalankan Backend Laravel
+## 5. Jalankan Backend
 
 Sebelum menjalankan aplikasi mobile, jalankan backend dari project web terlebih dahulu.
 
-Pastikan container backend dan nginx berjalan.
+Pastikan container backend, nginx, dan database di Docker Desktop berjalan.
 
 Cek dari browser laptop:
 
@@ -83,7 +110,7 @@ berarti backend sudah berjalan.
 
 ---
 
-## 5. Cek IP Laptop
+## 6. Cek IP Laptop
 
 Cari IP laptop yang digunakan pada jaringan Wi-Fi.
 
@@ -93,7 +120,7 @@ Di Windows, jalankan:
 ipconfig
 ```
 
-Cari bagian adapter Wi-Fi, lalu lihat nilai:
+Cari bagian adapter Wi-Fi, lalu lihat:
 
 ```text
 IPv4 Address
@@ -113,7 +140,7 @@ EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
 
 ---
 
-## 6. Cek Koneksi Backend dari HP
+## 7. Cek Koneksi Backend dari HP
 
 Pastikan HP dan laptop berada di jaringan yang sama.
 
@@ -148,7 +175,7 @@ Jika tidak bisa diakses, periksa:
 
 ---
 
-## 7. Jalankan Project Mobile
+## 8. Jalankan Project Mobile
 
 Jalankan Expo:
 
@@ -159,4 +186,54 @@ npx expo start -c
 Scan QR code menggunakan aplikasi **Expo Go** di HP Android.
 
 ---
-````
+
+## 9. Cek Aplikasi
+
+Setelah aplikasi terbuka di Expo Go, lakukan pengecekan berikut:
+
+- Login admin berhasil
+- Login penyewa berhasil
+- Logout berhasil
+- Navigasi admin bisa diakses
+- Navigasi penyewa bisa diakses
+- Role admin tidak bisa mengakses halaman penyewa
+- Role penyewa tidak bisa mengakses halaman admin
+
+---
+
+## 10. Checklist Sebelum Development
+
+Pastikan semua ini sudah berhasil:
+
+- Sudah berada di branch `develop`
+- Dependency sudah diinstall
+- File `.env` sudah dibuat
+- URL di `.env` menggunakan `http://`
+- Backend Laravel berjalan
+- HP bisa membuka `/api/profile`
+- Expo Go bisa membuka aplikasi
+- Login admin berhasil
+- Login penyewa berhasil
+- Logout berhasil
+
+---
+
+## 11. Membuat Branch Fitur
+
+Sebelum membuat fitur baru, pastikan berada di branch `develop` dan branch tersebut sudah terbaru.
+
+```bash
+git checkout develop
+```
+
+Buat branch fitur dari `develop`:
+
+```bash
+git checkout -b fitur-nama
+```
+
+Contoh:
+
+```bash
+git checkout -b fitur-afrizal
+```
