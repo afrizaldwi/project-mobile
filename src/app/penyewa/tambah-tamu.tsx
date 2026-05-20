@@ -12,7 +12,7 @@ import {
     View,
 } from "react-native";
 
-import { apiClient } from "@/api/client";
+import { tamuService } from "@/api/tamuService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export default function TambahTamuScreen() {
@@ -30,7 +30,7 @@ export default function TambahTamuScreen() {
 
         setIsSubmitting(true);
         try {
-            await apiClient.post("/penyewa/tamu", {
+            await tamuService.createPenyewaTamu({
                 nama_tamu: nama,
                 no_hp_tamu: noHp,
                 keperluan: keperluan,
@@ -57,8 +57,8 @@ export default function TambahTamuScreen() {
 
     return (
         <ProtectedRoute allowedRoles={["penyewa"]}>
-            <KeyboardAvoidingView 
-                style={{ flex: 1 }} 
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
                 <ScrollView className="flex-1 bg-secondary">

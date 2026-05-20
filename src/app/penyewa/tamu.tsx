@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
-import { apiClient } from "@/api/client";
+import { tamuService } from "@/api/tamuService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { TamuCard } from "@/components/TamuCard";
 import { Tamu } from "@/types";
@@ -16,8 +16,8 @@ export default function PenyewaTamuScreen() {
 
     const fetchTamus = async () => {
         try {
-            const response = await apiClient.get<{ data: Tamu[] }>("/penyewa/tamu");
-            setTamus(response.data.data);
+            const data = await tamuService.getPenyewaTamus();
+            setTamus(data);
         } catch (error) {
             console.error("Failed to fetch tamu:", error);
         } finally {

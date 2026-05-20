@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
-import { apiClient } from "@/api/client";
+import { keluhanService } from "@/api/keluhanService";
 import { KeluhanCard } from "@/components/KeluhanCard";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Keluhan } from "@/types";
@@ -16,8 +16,8 @@ export default function PenyewaKeluhanScreen() {
 
     const fetchKeluhans = async () => {
         try {
-            const response = await apiClient.get<{ data: Keluhan[] }>("/penyewa/keluhan");
-            setKeluhans(response.data.data);
+            const data = await keluhanService.getPenyewaKeluhans();
+            setKeluhans(data);
         } catch (error) {
             console.error("Failed to fetch keluhan:", error);
         } finally {

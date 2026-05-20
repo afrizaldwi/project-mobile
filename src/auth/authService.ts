@@ -2,24 +2,31 @@ import { apiClient } from "@/api/client";
 import { deleteToken, saveToken } from "@/auth/tokenStorage";
 import type { LoginPayload, LoginResponse, ProfileResponse, User } from "@/types";
 
-export async function login(payload: LoginPayload): Promise<User> {
-    const response = await apiClient.post<LoginResponse>("/login", payload);
+// Penerapan Factory Pattern (Functional) untuk AuthService
+export const createAuthService = (client = apiClient) => {
+    return {
+        login: async (payload: LoginPayload): Promise<User> => {
+            const response = await client.post<LoginResponse>("/login", payload);
+            await saveToken(response.data.token);
+            return response.data.user;
+        },
 
-    await saveToken(response.data.token);
+        getCurrentUser: async (): Promise<User> => {
+            const response = await client.get<ProfileResponse>("/profile");
+            return response.data.user;
+        },
 
-    return response.data.user;
-}
+        logout: async (): Promise<void> => {
+            try {
+                await client.post("/logout");
+            } finally {
+                await deleteToken();
+            }
+        }
+    };
+};
 
-export async function getCurrentUser(): Promise<User> {
-    const response = await apiClient.get<ProfileResponse>("/profile");
+// Membuat instance tunggal dan meng-export fungsinya agar tidak merusak kode lain
+export const authService = createAuthService();
 
-    return response.data.user;
-}
-
-export async function logout(): Promise<void> {
-    try {
-        await apiClient.post("/logout");
-    } finally {
-        await deleteToken();
-    }
-}
+export const { login, getCurrentUser, logout } = authService;
