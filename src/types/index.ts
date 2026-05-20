@@ -1,28 +1,40 @@
-export type UserRole = "admin" | "penyewa";
+export interface Invoice {
+  id: string;
+  nomor_invoice: string;
+  penghuni_id: string;
+  penghuni_nama: string;
+  kamar_nomor: string;
+  periode_bulan: string; // format: "2025-01"
+  tanggal_jatuh_tempo: string;
+  tanggal_bayar?: string;
+  total_tagihan: number;
+  status: 'belum_bayar' | 'sudah_bayar' | 'terlambat';
+  items: InvoiceItem[];
+}
 
-export type User = {
-    id: number;
-    namaLengkap: string;
-    email: string;
-    role: UserRole;
-    noHp?: string;
-    fotoProfil?: string | null;
-    alamatAsal?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
-};
+export interface InvoiceItem {
+  keterangan: string;
+  jumlah: number;
+}
 
-export type LoginPayload = {
-    email: string;
-    password: string;
-};
+export interface LaporanKeuangan {
+  periode: string;
+  total_pemasukan: number;
+  total_tagihan: number;
+  total_lunas: number;
+  total_belum_bayar: number;
+  total_terlambat: number;
+  transaksi: Transaksi[];
+}
 
-export type LoginResponse = {
-    message: string;
-    token: string;
-    user: User;
-};
-
-export type ProfileResponse = {
-    user: User;
-};
+export interface Transaksi {
+  id: string;
+  invoice_id: string;
+  nomor_invoice: string;
+  penghuni_nama: string;
+  kamar_nomor: string;
+  jumlah: number;
+  tanggal: string;
+  metode_bayar: string;
+  status: 'sukses' | 'gagal' | 'pending';
+}
