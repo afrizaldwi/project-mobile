@@ -2,6 +2,7 @@ import { tagihanApi } from '@/api/tagihanApi';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { NotificationFacade } from '@/services/NotificationFacade';
 
 const BACKGROUND_FETCH_TASK = 'BACKGROUND-CHECK-NOTIFIKASI';
 
@@ -10,26 +11,17 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
+// Cukup panggil gerbang utama (Facade)
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-    const dataNotif = await tagihanApi.getNotifications(true);
-
-    if (dataNotif && dataNotif.length > 0) {
-      for (const notif of dataNotif) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: notif.judul || 'Info Kost',
-            body: notif.pesan || 'Ada tagihan baru.',
-          },
-          trigger: null,
-        });
-      }
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-    return BackgroundFetch.BackgroundFetchResult.NoData;
+    // Facade menyembunyikan kerumitan di balik satu fungsi ini
+    await NotificationFacade.checkAndNotify(); 
+    return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (error) {
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
