@@ -1,5 +1,6 @@
-import * as Notifications from 'expo-notifications';
-import * as Linking from 'expo-linking';
+import * as Linking from "expo-linking";
+
+import { isExpoGo } from "@/utils/isExpoGo";
 
 export interface NotificationStrategy {
   send(notif: any): Promise<void>;
@@ -7,24 +8,32 @@ export interface NotificationStrategy {
 
 export class PushNotificationStrategy implements NotificationStrategy {
   async send(notif: any) {
-    await Notifications.scheduleNotificationAsync({
-      content: { title: notif.judul || 'Info', body: notif.pesan },
-      trigger: null,
-    });
+    if (isExpoGo) return;
+
+    try {
+      const Notifications = await import("expo-notifications");
+      await Notifications.scheduleNotificationAsync({
+        content: { title: notif.judul || "Info", body: notif.pesan },
+        trigger: null,
+      });
+    } catch (error) {
+      console.warn("[PushNotificationStrategy] Gagal menampilkan notifikasi:", error);
+    }
   }
 }
 
 export class WhatsAppNotificationStrategy implements NotificationStrategy {
   async send(notif: any) {
     const whatsapp = notif.tagihan?.whatsapp;
-    if (whatsapp && whatsapp.enabled && whatsapp.url) {
+    if (whatsapp?.enabled && whatsapp.url) {
       try {
         await Linking.openURL(whatsapp.url);
       } catch (error) {
-        console.warn('[WhatsApp Strategy] Gagal membuka WhatsApp (mungkin berjalan di latar belakang):', error);
+        console.warn(
+          "[WhatsApp Strategy] Gagal membuka WhatsApp (mungkin berjalan di latar belakang):",
+          error
+        );
       }
-    } else {
-      console.log(`[WhatsApp Strategy] Pengiriman WA dilewati karena data nomor/pesan tidak tersedia.`);
     }
   }
 }

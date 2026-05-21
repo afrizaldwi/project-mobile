@@ -1,4 +1,4 @@
-import { InvoiceItem } from "@/types";
+import type { InvoiceItem } from "@/api/invoice";
 
 export class InvoicePdfFactory {
     static generateHtml(invoice: InvoiceItem): string {
@@ -100,7 +100,7 @@ export class InvoicePdfFactory {
                     </div>
                     <div class="invoice-info" style="text-align: right;">
                         <p><strong>No Invoice:</strong> ${invoice.kode_invoice || "INV-000"}</p>
-                        <p><strong>Tanggal:</strong> ${formatDate(invoice.tanggal_bayar)}</p>
+                        <p><strong>Tanggal:</strong> ${formatDate(invoice.tanggal_bayar ?? undefined)}</p>
                         <p><strong>Status:</strong> <span style="color: #2e7d32; font-weight: bold;">LUNAS</span></p>
                     </div>
                 </div>
@@ -115,7 +115,7 @@ export class InvoicePdfFactory {
                     <div class="details-box">
                         <h3>Detail Kamar:</h3>
                         <p><strong>Kamar: ${invoice.kamar?.nomor_kamar || "-"}</strong></p>
-                        <p>Tipe: ${invoice.kamar?.tipe_kamar || "Standar"}</p>
+                        <p>Tipe: Standar</p>
                     </div>
                 </div>
 
@@ -131,11 +131,11 @@ export class InvoicePdfFactory {
                         <tr>
                             <td>Pembayaran Sewa Kamar ${invoice.kamar?.nomor_kamar || "-"}</td>
                             <td style="text-transform: capitalize;">${invoice.metode_pembayaran || "-"}</td>
-                            <td style="text-align: right;">${formatRupiah(invoice.jumlah_bayar)}</td>
+                            <td style="text-align: right;">${formatRupiah(Number(invoice.jumlah_bayar))}</td>
                         </tr>
                         <tr class="total-row">
                             <td colspan="2" style="text-align: right;">TOTAL DIBAYARKAN</td>
-                            <td style="text-align: right;" class="total-amount">${formatRupiah(invoice.jumlah_bayar)}</td>
+                            <td style="text-align: right;" class="total-amount">${formatRupiah(Number(invoice.jumlah_bayar))}</td>
                         </tr>
                     </tbody>
                 </table>

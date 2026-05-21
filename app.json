@@ -47,14 +47,13 @@
         {
           "photosPermission": "The app accesses your photos to let you share them with us for reports.",
           "cameraPermission": "The app accesses your camera to let you take photos for reports."
-        },
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
-            "permissions": [
-              "RECEIVE_BOOT_COMPLETED",
-              "WAKE_LOCK"
-            ]
+            "usesCleartextTraffic": true
           }
         }
       ]

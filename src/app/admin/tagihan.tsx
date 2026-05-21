@@ -233,7 +233,7 @@ export default function AdminTagihanScreen() {
                         /* Modular Pending Payments List */
                         <PendingPaymentsList
                             pendingPayments={pendingPayments}
-                            onInspect={(payment) => {
+                            onInspect={(payment: PendingPembayaranItem) => {
                                 setPreview(payment);
                                 setCatatan("");
                             }}

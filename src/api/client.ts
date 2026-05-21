@@ -3,27 +3,16 @@ import axios from "axios";
 import { deleteToken, getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 
-<<<<<<< HEAD
 // Penerapan Factory Pattern untuk HTTP Client
 export const createApiClient = (baseURL: string = API_BASE_URL) => {
     const client = axios.create({
         baseURL,
-        timeout: 10000,
+        timeout: 30000,
         headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
         },
     });
-=======
-export const apiClient = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 30000,
-    headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-    },
-});
->>>>>>> origin/ima/admin-penghuni-laporan-keuangan
 
     client.interceptors.request.use(async (config) => {
         const token = await getToken();
@@ -51,4 +40,3 @@ export const apiClient = axios.create({
 
 // Membuat instance default agar logika dan import di file lain tidak perlu diubah
 export const apiClient = createApiClient();
-

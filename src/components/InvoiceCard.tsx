@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { InvoiceItem } from "@/types";
+import type { InvoiceItem } from "@/api/invoice";
 import { InvoicePdfFactory } from "@/utils/InvoicePdfFactory";
 
 interface InvoiceCardProps {
@@ -66,7 +66,7 @@ export const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice }) => {
                         {invoice.kode_invoice || "-"}
                     </Text>
                     <Text className="text-xs font-medium text-dark/50">
-                        {formatDate(invoice.tanggal_bayar)}
+                        {formatDate(invoice.tanggal_bayar ?? undefined)}
                     </Text>
                 </View>
                 <View className="rounded-full bg-success/10 px-3 py-1">
@@ -84,7 +84,7 @@ export const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice }) => {
                     </View>
                     <View className="items-end">
                         <Text className="font-black text-success">
-                            {formatRupiah(invoice.jumlah_bayar)}
+                            {formatRupiah(Number(invoice.jumlah_bayar))}
                         </Text>
                         <Text className="text-xs capitalize text-dark/40">
                             {invoice.metode_pembayaran || "-"}
