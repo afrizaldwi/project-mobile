@@ -6,9 +6,7 @@ import { downloadAndShareFile } from "@/utils/fileDownload";
 import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 
-// ============================================================
-// Tipe data payload untuk setiap operasi
-// ============================================================
+
 export interface CreateKeluhanPayload {
     judul_keluhan: string;
     deskripsi_keluhan: string;

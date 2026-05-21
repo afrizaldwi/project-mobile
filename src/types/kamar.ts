@@ -34,3 +34,9 @@ export type KamarListResponse = {
     terisi: number;
     perbaikan: number;
 };
+
+/** Kamar yang bisa dipilih saat tambah penghuni */
+export type KamarTersedia = Pick<
+    Kamar,
+    "id_kamar" | "nomor_kamar" | "harga_bulanan" | "fasilitas"
+>;

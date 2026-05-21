@@ -24,8 +24,12 @@ export default function AdminTambahPenghuniScreen() {
         formatCurrency,
         handleSave,
         handleCancel,
+        fetchAvailableRooms,
         roomData,
-        isSaving, // Destructuring isSaving correctly here
+        availableTipeList,
+        isSaving,
+        isLoadingRooms,
+        roomsError,
     } = useTambahPenghuni();
 
     return (
@@ -68,9 +72,13 @@ export default function AdminTambahPenghuniScreen() {
                         durasiBulan={durasiBulan}
                         setDurasiBulan={setDurasiBulan}
                         roomData={roomData}
+                        availableTipeList={availableTipeList}
                         totalTagihan={totalTagihan}
                         estimasiCheckOut={estimasiCheckOut}
                         formatCurrency={formatCurrency}
+                        isLoadingRooms={isLoadingRooms}
+                        roomsError={roomsError}
+                        onRetryLoadRooms={fetchAvailableRooms}
                     />
                 </ScrollView>
 
@@ -85,8 +93,8 @@ export default function AdminTambahPenghuniScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={handleSave} 
-                        disabled={isSaving}
-                        className={`bg-primary px-6 py-3 rounded-lg shadow-sm flex-row items-center ${isSaving ? "opacity-70" : ""}`}
+                        disabled={isSaving || isLoadingRooms}
+                        className={`bg-primary px-6 py-3 rounded-lg shadow-sm flex-row items-center ${isSaving || isLoadingRooms ? "opacity-70" : ""}`}
                     >
                         {isSaving ? (
                             <ActivityIndicator size="small" color="#ffffff" className="mr-2" />

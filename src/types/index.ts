@@ -68,7 +68,6 @@ export type ProfileResponse = {
     user: User;
 };
 
-<<<<<<< HEAD
 export type Keluhan = {
     id_keluhan: number;
     id_sewa: number;
@@ -94,7 +93,6 @@ export type Tamu = {
     nama_penghuni: string;
     nomor_kamar: string;
 }
-=======
 export type DashboardKeluhanStatus = "pending" | "proses" | "selesai";
 
 export type AdminDashboardSummary = {
@@ -163,4 +161,3 @@ export type PenyewaDashboardSummary = {
         tanggal: string;
     }>;
 };
->>>>>>> origin/afrizal/dashboard

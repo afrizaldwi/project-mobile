@@ -1,15 +1,159 @@
+import axios from "axios";
+
 import { apiClient } from "@/api/client";
 import { API_BASE_URL } from "@/constants/env";
-import type { Kamar, KamarListResponse, KamarPayload, KamarStatus } from "@/types/kamar";
+import type {
+    Kamar,
+    KamarListResponse,
+    KamarPayload,
+    KamarStatus,
+    KamarTersedia,
+} from "@/types/kamar";
+
+const KAMAR_LIST_PATHS = ["/admin/kamar", "/admin/laporan/kamar"] as const;
+const KAMAR_TERSEDIA_PATHS = [
+    "/admin/kamar/tersedia",
+    "/admin/laporan/kamar/tersedia",
+] as const;
+
+function extractKamarList(payload: unknown): Kamar[] {
+    if (!payload || typeof payload !== "object") {
+        return [];
+    }
+
+    const body = payload as Record<string, unknown>;
+
+    if (body.data && typeof body.data === "object" && !Array.isArray(body.data)) {
+        const nested = extractKamarList(body.data);
+        if (nested.length > 0) {
+            return nested;
+        }
+    }
+
+    if (Array.isArray(body.data)) {
+        return body.data as Kamar[];
+    }
+
+    if (Array.isArray(body.kamar)) {
+        return body.kamar as Kamar[];
+    }
+
+    if (Array.isArray(body.rooms)) {
+        return body.rooms as Kamar[];
+    }
+
+    if (Array.isArray(payload)) {
+        return payload as Kamar[];
+    }
+
+    return [];
+}
+
+function isKamarTersedia(room: Kamar): boolean {
+    const status = String(room.status_kamar ?? "")
+        .toLowerCase()
+        .trim();
+
+    if (!status) {
+        return true;
+    }
+
+    return (
+        status === "tersedia" ||
+        status === "available" ||
+        status === "kosong" ||
+        status === "vacant"
+    );
+}
+
+function mapToKamarTersedia(room: Kamar): KamarTersedia {
+    return {
+        id_kamar: Number(room.id_kamar),
+        nomor_kamar: String(room.nomor_kamar ?? ""),
+        harga_bulanan: Number(room.harga_bulanan) || 0,
+        fasilitas: room.fasilitas ?? "",
+    };
+}
+
+export async function getKamarTersedia(): Promise<KamarTersedia[]> {
+    for (const path of KAMAR_TERSEDIA_PATHS) {
+        try {
+            const res = await apiClient.get(path);
+            const rooms = extractKamarList(res.data);
+
+            const available = rooms.filter(
+                (room) => room.id_kamar && (!room.status_kamar || isKamarTersedia(room))
+            );
+
+            if (available.length > 0) {
+                return available.map(mapToKamarTersedia);
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    const listResponse = await getAllKamar();
+    const rooms = listResponse.data ?? [];
+
+    const available = rooms.filter(
+        (room) => room.id_kamar && isKamarTersedia(room)
+    );
+
+    return available.map(mapToKamarTersedia);
+}
 
 export async function getAllKamar(): Promise<KamarListResponse> {
-    const res = await apiClient.get<KamarListResponse>("/admin/kamar");
-    return res.data;
+    let lastError: unknown;
+
+    for (const path of KAMAR_LIST_PATHS) {
+        try {
+            const res = await apiClient.get(path);
+            const rooms = extractKamarList(res.data);
+
+            if (rooms.length > 0 || typeof res.data === "object") {
+                const body = res.data as Partial<KamarListResponse>;
+                return {
+                    data: rooms,
+                    total: body.total ?? rooms.length,
+                    tersedia:
+                        body.tersedia ??
+                        rooms.filter((r) => isKamarTersedia(r)).length,
+                    terisi:
+                        body.terisi ??
+                        rooms.filter((r) => String(r.status_kamar).toLowerCase() === "terisi")
+                            .length,
+                    perbaikan: body.perbaikan ?? 0,
+                };
+            }
+        } catch (error) {
+            lastError = error;
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw lastError ?? new Error("Endpoint daftar kamar tidak ditemukan.");
 }
 
 export async function getKamarById(id: number): Promise<Kamar> {
-    const res = await apiClient.get<{ data: Kamar }>(`/admin/kamar/${id}`);
-    return res.data.data;
+    for (const base of KAMAR_LIST_PATHS) {
+        try {
+            const res = await apiClient.get<{ data: Kamar }>(`${base}/${id}`);
+            return res.data.data;
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw new Error("Kamar tidak ditemukan.");
 }
 
 export async function createKamar(payload: KamarPayload): Promise<Kamar> {
