@@ -1,3 +1,4 @@
+// src/constants/navigation.ts
 export type NavigationItem = {
     label: string;
     path: string;
@@ -16,7 +17,7 @@ export const adminNavigation: NavigationItem[] = [
 
 export const penyewaNavigation: NavigationItem[] = [
     { label: "Beranda", path: "/penyewa/dashboard" },
-    { label: "Tagihan", path: "/penyewa/tagihan" },
+    { label: "Tagihan & Invoice", path: "/penyewa/tagihan" }, // ← diubah labelnya
     { label: "Tamu", path: "/penyewa/tamu" },
     { label: "Keluhan", path: "/penyewa/keluhan" },
     { label: "Profil", path: "/penyewa/profil" },

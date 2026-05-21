@@ -1,0 +1,24 @@
+import React from "react";
+import { View, Text } from "react-native";
+
+export type AdminSummaryCardProps = {
+    label: string;
+    value: string;
+    icon: string;
+    color: string;
+};
+
+export function AdminSummaryCard({ label, value, icon, color }: AdminSummaryCardProps) {
+    return (
+        <View className="flex-1 rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
+            <View
+                className="mb-2 h-9 w-9 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${color}18` }}
+            >
+                <Text style={{ fontSize: 18 }}>{icon}</Text>
+            </View>
+            <Text className="text-xl font-black text-dark">{value}</Text>
+            <Text className="text-xs font-bold text-dark/40 mt-0.5">{label}</Text>
+        </View>
+    );
+}

@@ -19,12 +19,17 @@
     "babel-preset-expo": "^55.0.21",
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",
+<<<<<<< HEAD
     "expo-file-system": "~19.0.22",
+=======
+    "expo-file-system": "17.0.1",
+>>>>>>> origin/salsa/invoice-transaksi-laporan-keuangan
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
     "expo-image-picker": "^55.0.20",
     "expo-linking": "~8.0.11",
+    "expo-print": "^55.0.15",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",

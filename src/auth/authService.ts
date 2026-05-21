@@ -19,6 +19,8 @@ export const createAuthService = (client = apiClient) => {
         logout: async (): Promise<void> => {
             try {
                 await client.post("/logout");
+            } catch (error) {
+                console.log("Logout error:", error); // ← ambil dari salsa
             } finally {
                 await deleteToken();
             }
@@ -26,7 +28,5 @@ export const createAuthService = (client = apiClient) => {
     };
 };
 
-// Membuat instance tunggal dan meng-export fungsinya agar tidak merusak kode lain
 export const authService = createAuthService();
-
 export const { login, getCurrentUser, logout } = authService;
