@@ -6,12 +6,14 @@ interface PenghuniCardProps {
     item: Penghuni;
     activeTab: "AKTIF" | "NON AKTIF";
     onArchive: (id: string) => void;
+    onPerpanjang: (item: Penghuni) => void;
 }
 
 export const PenghuniCard: React.FC<PenghuniCardProps> = ({
     item,
     activeTab,
     onArchive,
+    onPerpanjang,
 }) => {
     return (
         <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100">
@@ -64,10 +66,13 @@ export const PenghuniCard: React.FC<PenghuniCardProps> = ({
             {/* Action Buttons for Active Tenants */}
             {activeTab === "AKTIF" && (
                 <View className="flex-row justify-end items-center mt-3 pt-3 border-t border-gray-100">
-                    <TouchableOpacity className="mr-4 px-3 py-1.5 rounded-lg bg-gray-50">
+                    <TouchableOpacity
+                        onPress={() => onPerpanjang(item)}
+                        className="mr-4 px-3 py-1.5 rounded-lg bg-gray-50"
+                    >
                         <Text className="text-xs font-semibold text-gray-500">Perpanjang</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => onArchive(item.id)}
                         className="bg-red-50 px-3 py-1.5 rounded-lg border border-red-100"
                     >

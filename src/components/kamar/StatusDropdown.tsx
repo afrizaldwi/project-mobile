@@ -8,6 +8,7 @@ const FILTER_OPTIONS: { label: string; value: FilterStatus }[] = [
     { label: "Semua Status", value: "semua" },
     { label: "Tersedia", value: "tersedia" },
     { label: "Terisi", value: "terisi" },
+    { label: "Perbaikan", value: "perbaikan" },
 ];
 
 type StatusDropdownProps = {

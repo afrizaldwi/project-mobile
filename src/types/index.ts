@@ -6,10 +6,15 @@ export type User = {
     email: string;
     role: UserRole;
     noHp?: string;
+    no_hp?: string | null;
     fotoProfil?: string | null;
+    foto_profil?: string | null;
     alamatAsal?: string | null;
+    alamat_asal?: string | null;
     createdAt?: string;
+    created_at?: string | null;
     updatedAt?: string;
+    updated_at?: string | null;
 };
 
 export type LoginPayload = {
@@ -18,49 +23,52 @@ export type LoginPayload = {
 };
 
 export interface Invoice {
-  id: string;
-  nomor_invoice: string;
-  penghuni_id: string;
-  penghuni_nama: string;
-  kamar_nomor: string;
-  periode_bulan: string;
-  tanggal_jatuh_tempo: string;
-  tanggal_bayar?: string;
-  total_tagihan: number;
-  status: 'belum_bayar' | 'sudah_bayar' | 'terlambat';
-  items: InvoiceLineItem[];
+    id: string;
+    nomor_invoice: string;
+    penghuni_id: string;
+    penghuni_nama: string;
+    kamar_nomor: string;
+    periode_bulan: string;
+    tanggal_jatuh_tempo: string;
+    tanggal_bayar?: string;
+    total_tagihan: number;
+    status: 'belum_bayar' | 'sudah_bayar' | 'terlambat';
+    items: InvoiceLineItem[];
 }
 
 export interface InvoiceLineItem {
-  keterangan: string;
-  jumlah: number;
+    keterangan: string;
+    jumlah: number;
 }
 
 export interface LaporanKeuangan {
-  periode: string;
-  total_pemasukan: number;
-  total_tagihan: number;
-  total_lunas: number;
-  total_belum_bayar: number;
-  total_terlambat: number;
-  transaksi: Transaksi[];
+    periode: string;
+    total_pemasukan: number;
+    total_tagihan: number;
+    total_lunas: number;
+    total_belum_bayar: number;
+    total_terlambat: number;
+    transaksi: Transaksi[];
 }
 
 export interface Transaksi {
-  id: string;
-  invoice_id: string;
-  nomor_invoice: string;
-  penghuni_nama: string;
-  kamar_nomor: string;
-  jumlah: number;
-  tanggal: string;
-  metode_bayar: string;
-  status: 'sukses' | 'gagal' | 'pending';
+    id: string;
+    invoice_id: string;
+    nomor_invoice: string;
+    penghuni_nama: string;
+    kamar_nomor: string;
+    jumlah: number;
+    tanggal: string;
+    metode_bayar: string;
+    status: 'sukses' | 'gagal' | 'pending';
 }
 
 export type LoginResponse = {
     message: string;
-    token: string;
+    token?: string;
+    access_token?: string;
+    token_type?: string;
+    expires_in?: number;
     user: User;
 };
 
@@ -120,11 +128,11 @@ export type AdminDashboardSummary = {
             selesai: number;
         };
     };
-    recent_keluhan: Array<{
+    recent_keluhan: {
         judul: string;
         status: DashboardKeluhanStatus;
         tanggal: string;
-    }>;
+    }[];
 };
 
 export type PenyewaDashboardSummary = {
@@ -155,9 +163,9 @@ export type PenyewaDashboardSummary = {
         progress_persen: number;
         sisa_masa_sewa: string;
     } | null;
-    keluhan_terakhir: Array<{
+    keluhan_terakhir: {
         judul: string;
         status: DashboardKeluhanStatus;
         tanggal: string;
-    }>;
+    }[];
 };

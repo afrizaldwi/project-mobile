@@ -1,26 +1,39 @@
 import { NotificationFacade } from "@/services/NotificationFacade";
-import { isExpoGo } from "@/utils/isExpoGo";
+import { LogBox, Platform } from "react-native";
+import { isExpoGo } from "./isExpoGo";
 
 const BACKGROUND_FETCH_TASK = "BACKGROUND-CHECK-NOTIFIKASI";
 
+if (isExpoGo) {
+  LogBox.ignoreLogs([
+    "expo-notifications: Android Push notifications",
+    "`expo-notifications` functionality is not fully supported in Expo Go",
+  ]);
+}
+
 let setupStarted = false;
 
+function devLog(message: string, details?: Record<string, unknown>) {
+  if (__DEV__) {
+    console.log("[backgroundTask]", message, details ?? "");
+  }
+}
+
 /**
- * Registers local notifications + background fetch. Skipped in Expo Go because
- * push/background APIs require a development build (SDK 53+).
+ * Registers local notifications + background fetch. In Expo Go, foreground
+ * local notification setup still runs while background fetch registration is skipped.
  */
 export async function setupNotificationsAndBackgroundFetch(): Promise<void> {
-  if (isExpoGo || setupStarted) return;
+  if (setupStarted) return;
   setupStarted = true;
 
   try {
     const Notifications = await import("expo-notifications");
-    const BackgroundFetch = await import("expo-background-fetch");
-    const TaskManager = await import("expo-task-manager");
+
+    devLog("setup started", { isExpoGo });
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
         shouldShowBanner: true,
@@ -28,22 +41,39 @@ export async function setupNotificationsAndBackgroundFetch(): Promise<void> {
       }),
     });
 
-    const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(
-      BACKGROUND_FETCH_TASK
-    );
-    if (!alreadyRegistered) {
-      TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
-        try {
-          await NotificationFacade.checkAndNotify();
-          return BackgroundFetch.BackgroundFetchResult.NewData;
-        } catch {
-          return BackgroundFetch.BackgroundFetchResult.Failed;
-        }
-      });
+    if (Platform.OS === "android") {
+      const channel = await Notifications.getNotificationChannelAsync("default");
+      if (!channel) {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Notifikasi",
+          importance: Notifications.AndroidImportance.HIGH,
+        });
+      }
     }
 
     const { status } = await Notifications.requestPermissionsAsync();
+    devLog("permission status", { status });
     if (status !== "granted") return;
+
+    await NotificationFacade.checkAndNotify();
+    devLog("foreground notification check ran");
+
+    if (isExpoGo) {
+      devLog("background fetch registration skipped", { reason: "Expo Go" });
+      return;
+    }
+
+    const BackgroundFetch = await import("expo-background-fetch");
+    const TaskManager = await import("expo-task-manager");
+
+    TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
+      try {
+        await NotificationFacade.checkAndNotify();
+        return BackgroundFetch.BackgroundFetchResult.NewData;
+      } catch {
+        return BackgroundFetch.BackgroundFetchResult.Failed;
+      }
+    });
 
     const isRegistered = await TaskManager.isTaskRegisteredAsync(
       BACKGROUND_FETCH_TASK
@@ -54,6 +84,9 @@ export async function setupNotificationsAndBackgroundFetch(): Promise<void> {
         stopOnTerminate: false,
         startOnBoot: true,
       });
+      devLog("background fetch registered");
+    } else {
+      devLog("background fetch already registered");
     }
   } catch (error) {
     console.warn("[backgroundTask] Native notifications unavailable:", error);

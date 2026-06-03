@@ -10,6 +10,7 @@ import {
     View,
 } from "react-native";
 
+import { invoiceApi } from "@/api/invoice";
 import type { NotifikasiItem, PendingPembayaranItem, TagihanReminderItem } from "@/api/tagihanApi";
 import { tagihanApi } from "@/api/tagihanApi";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -35,6 +36,7 @@ export default function AdminTagihanScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
     const [verifyingId, setVerifyingId] = useState<number | null>(null);
+    const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
     const stats = useMemo(() => ({
@@ -119,6 +121,23 @@ export default function AdminTagihanScreen() {
             Linking.openURL(item.whatsapp.url);
         } else {
             Alert.alert("Tidak Tersedia", "Nomor WhatsApp penyewa tidak tersedia.");
+        }
+    };
+
+    const handleDownloadInvoice = async (item: TagihanReminderItem) => {
+        const paymentId = item.pembayaran_terbaru?.id_pembayaran;
+        if (!paymentId) {
+            Alert.alert("Invoice Belum Tersedia", "Data pembayaran untuk invoice ini belum tersedia.");
+            return;
+        }
+
+        try {
+            setDownloadingInvoiceId(paymentId);
+            await invoiceApi.downloadAdminInvoicePdf(paymentId, item.kode_invoice || "invoice");
+        } catch (error: any) {
+            Alert.alert("Gagal Mengunduh", error?.message || "Gagal mengunduh invoice PDF.");
+        } finally {
+            setDownloadingInvoiceId(null);
         }
     };
 
@@ -228,7 +247,12 @@ export default function AdminTagihanScreen() {
                         <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
                     ) : activeTab === "semua" ? (
                         /* Modular Tagihan List */
-                        <TagihanList tagihan={tagihan} handleSendWA={handleSendWA} />
+                        <TagihanList
+                            tagihan={tagihan}
+                            handleSendWA={handleSendWA}
+                            downloadingInvoiceId={downloadingInvoiceId}
+                            onDownloadInvoice={handleDownloadInvoice}
+                        />
                     ) : (
                         /* Modular Pending Payments List */
                         <PendingPaymentsList

@@ -9,7 +9,7 @@ import {
     TextInput,
     View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
@@ -43,6 +43,7 @@ export default function AdminKamarScreen() {
         total: kamarData?.total ?? 0,
         tersedia: kamarData?.tersedia ?? 0,
         terisi: kamarData?.terisi ?? 0,
+        perbaikan: kamarData?.perbaikan ?? 0,
     };
 
     const fetchKamar = useCallback(async () => {
@@ -59,9 +60,11 @@ export default function AdminKamarScreen() {
         }
     }, []);
 
-    useEffect(() => {
-        fetchKamar();
-    }, [fetchKamar]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchKamar();
+        }, [fetchKamar])
+    );
 
     useEffect(() => {
         let result = kamarList;
@@ -87,11 +90,11 @@ export default function AdminKamarScreen() {
         } catch (e: any) {
             setHapusModal({ visible: false, kamar: null });
             const msg = e?.response?.data?.message ?? "Gagal menghapus kamar.";
-            
+
             if (msg.includes("No query results")) {
                 Alert.alert(
-                    "Data Tidak Ditemukan", 
-                    "Kamar tidak ditemukan. Data akan di-refresh.",
+                    "Data Tidak Ditemukan",
+"Kamar tidak ditemukan. Data akan di-refresh.",
                     [{ text: "OK", onPress: () => fetchKamar() }]
                 );
             } else {
@@ -139,6 +142,7 @@ export default function AdminKamarScreen() {
                             { label: "Total", value: stats.total, color: "text-dark" },
                             { label: "Tersedia", value: stats.tersedia, color: "text-green-600" },
                             { label: "Terisi", value: stats.terisi, color: "text-red-600" },
+                            { label: "Perbaikan", value: stats.perbaikan, color: "text-amber-600" },
                         ].map((s) => (
                             <View
                                 key={s.label}

@@ -1,4 +1,4 @@
-export type KamarStatus = "tersedia" | "terisi";
+export type KamarStatus = "tersedia" | "terisi" | "perbaikan";
 
 export type Kamar = {
     id_kamar: number;

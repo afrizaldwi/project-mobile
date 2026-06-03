@@ -13,6 +13,7 @@ export interface Penghuni {
     tglMasuk: string;
     tglKeluar: string;
     status: StatusPenghuni;
+    hargaBulanan: number;
 }
 
 interface UserResponse {
@@ -50,6 +51,7 @@ const mockData: Penghuni[] = [
         tglMasuk: "2026-04-01",
         tglKeluar: "-",
         status: "AKTIF",
+        hargaBulanan: 0,
     },
     {
         id: "2",
@@ -60,6 +62,7 @@ const mockData: Penghuni[] = [
         tglMasuk: "2026-03-01",
         tglKeluar: "-",
         status: "AKTIF",
+        hargaBulanan: 0,
     },
     {
         id: "3",
@@ -70,6 +73,7 @@ const mockData: Penghuni[] = [
         tglMasuk: "2026-02-01",
         tglKeluar: "-",
         status: "AKTIF",
+        hargaBulanan: 0,
     },
     {
         id: "4",
@@ -80,6 +84,7 @@ const mockData: Penghuni[] = [
         tglMasuk: "2025-09-01",
         tglKeluar: "2026-03-31",
         status: "NON AKTIF",
+        hargaBulanan: 0,
     },
 ];
 
@@ -93,6 +98,7 @@ const mapResponseToPenghuni = (sewa: RiwayatSewaResponse): Penghuni => {
         tglMasuk: sewa.tanggal_masuk,
         tglKeluar: sewa.tanggal_keluar || "—",
         status: sewa.status_sewa === "aktif" ? "AKTIF" : "NON AKTIF",
+        hargaBulanan: Number(sewa.kamar?.harga_bulanan || 0),
     };
 };
 
@@ -116,7 +122,7 @@ export function usePenghuni() {
 
             if (res.data && Array.isArray(res.data.data)) {
                 let mappedData = res.data.data.map(mapResponseToPenghuni);
-                
+
                 // Client-side search filtering
                 if (searchQuery.trim()) {
                     const q = searchQuery.toLowerCase();

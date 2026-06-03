@@ -2,7 +2,6 @@ import React from "react";
 import { View } from "react-native";
 
 import { AdminKeluhanList } from "@/components/admin/keluhan/AdminKeluhanList";
-import { KeluhanExportButtons } from "@/components/admin/keluhan/KeluhanExportButtons";
 import { KeluhanStatusFilter } from "@/components/admin/keluhan/KeluhanStatusFilter";
 import { ScreenHeader } from "@/components/common/ScreenHeader";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -28,7 +27,6 @@ export default function AdminKeluhanScreen() {
                 <ScreenHeader
                     title="Data Keluhan"
                     subtitle="Kelola semua laporan keluhan penyewa"
-                    right={<KeluhanExportButtons onExport={handleExport} exporting={exporting} />}
                 />
                 <KeluhanStatusFilter filter={filter} onFilterChange={setFilter} />
                 <AdminKeluhanList

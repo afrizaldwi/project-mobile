@@ -15,8 +15,8 @@ export class LunasState implements PaymentState {
 }
 
 export class PendingState implements PaymentState {
-  getStatusLabel(isAdmin = false) { 
-    return isAdmin ? "Menunggu" : "Menunggu Verifikasi"; 
+  getStatusLabel(isAdmin = false) {
+    return isAdmin ? "Menunggu" : "Menunggu Verifikasi";
   }
   getStatusColor() { return "#d97706"; }
   getStatusBg() { return "#fffbeb"; }
@@ -44,10 +44,20 @@ export class BelumBayarState implements PaymentState {
   canPay() { return true; }
 }
 
+export class DibatalkanState implements PaymentState {
+  getStatusLabel() { return "Dibatalkan"; }
+  getStatusColor() { return "#6b7280"; }
+  getStatusBg() { return "#f3f4f6"; }
+  canPay() { return false; }
+}
+
 export class PaymentStateContext {
   static getState(item: TagihanReminderItem): PaymentState {
     const paymentStatus = item.pembayaran_terbaru?.status_verifikasi;
-    
+
+    if (item.status_tagihan === "dibatalkan") {
+      return new DibatalkanState();
+    }
     if (item.status_tagihan === "lunas" || paymentStatus === "diterima") {
       return new LunasState();
     }

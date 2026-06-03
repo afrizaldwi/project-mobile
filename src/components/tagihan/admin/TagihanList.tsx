@@ -1,11 +1,13 @@
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
 import { TagihanReminderItem } from "@/api/tagihanApi";
 import { PaymentStateContext } from "@/services/payment/PaymentState";
+import React from "react";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 
 interface TagihanListProps {
   tagihan: TagihanReminderItem[];
   handleSendWA: (item: TagihanReminderItem) => void;
+  downloadingInvoiceId?: number | null;
+  onDownloadInvoice?: (item: TagihanReminderItem) => void;
 }
 
 const formatRupiah = (value: string | number) =>
@@ -33,7 +35,24 @@ const getStatusConfig = (item: TagihanReminderItem) => {
   };
 };
 
-export const TagihanList: React.FC<TagihanListProps> = ({ tagihan, handleSendWA }) => {
+const isPaidOrVerified = (item: TagihanReminderItem) =>
+  item.status_tagihan === "lunas" || item.pembayaran_terbaru?.status_verifikasi === "diterima";
+
+const canSendWhatsApp = (item: TagihanReminderItem) =>
+  item.status_tagihan !== "lunas" &&
+  item.status_tagihan !== "dibatalkan" &&
+  item.pembayaran_terbaru?.status_verifikasi !== "diterima" &&
+  Boolean(item.whatsapp.enabled && item.whatsapp.url);
+
+const canDownloadInvoice = (item: TagihanReminderItem) =>
+  isPaidOrVerified(item) && Boolean(item.pembayaran_terbaru?.id_pembayaran);
+
+export const TagihanList: React.FC<TagihanListProps> = ({
+  tagihan,
+  handleSendWA,
+  downloadingInvoiceId,
+  onDownloadInvoice,
+}) => {
   if (tagihan.length === 0) {
     return (
       <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 24, alignItems: "center" }}>
@@ -46,6 +65,10 @@ export const TagihanList: React.FC<TagihanListProps> = ({ tagihan, handleSendWA 
     <>
       {tagihan.map((item) => {
         const status = getStatusConfig(item);
+        const showWhatsAppButton = canSendWhatsApp(item);
+        const showInvoiceButton = Boolean(canDownloadInvoice(item) && onDownloadInvoice);
+        const isDownloading = downloadingInvoiceId === item.pembayaran_terbaru?.id_pembayaran;
+
         return (
           <View
             key={item.id_tagihan}
@@ -96,28 +119,51 @@ export const TagihanList: React.FC<TagihanListProps> = ({ tagihan, handleSendWA 
               </Text>
             </View>
 
-            {/* Kirim WA */}
-            <TouchableOpacity
-              onPress={() => handleSendWA(item)}
-              style={{
-                backgroundColor: item.whatsapp.enabled && item.whatsapp.url ? "#f0fdf4" : "#f5f5f5",
-                borderRadius: 10,
-                padding: 10,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: item.whatsapp.enabled && item.whatsapp.url ? "#86efac" : "#e5e7eb",
-              }}
-            >
-              <Text
+            {showWhatsAppButton ? (
+              <TouchableOpacity
+                onPress={() => handleSendWA(item)}
                 style={{
-                  color: item.whatsapp.enabled && item.whatsapp.url ? "#15803d" : "#9ca3af",
-                  fontWeight: "800",
-                  fontSize: 12,
+                  backgroundColor: "#f0fdf4",
+                  borderRadius: 10,
+                  padding: 10,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: "#86efac",
                 }}
               >
-                {item.whatsapp.enabled && item.whatsapp.url ? "💬 Kirim WA" : "WA Tidak Tersedia"}
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={{
+                    color: "#15803d",
+                    fontWeight: "800",
+                    fontSize: 12,
+                  }}
+                >
+                  💬 Kirim WA
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {showInvoiceButton ? (
+              <TouchableOpacity
+                onPress={() => onDownloadInvoice?.(item)}
+                disabled={isDownloading}
+                style={{
+                  marginTop: 10,
+                  backgroundColor: isDownloading ? "#93c5fd" : "#2563eb",
+                  borderRadius: 10,
+                  padding: 10,
+                  alignItems: "center",
+                }}
+              >
+                {isDownloading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>
+                    Unduh Invoice PDF
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </View>
         );
       })}

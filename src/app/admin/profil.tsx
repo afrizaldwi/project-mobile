@@ -1,15 +1,14 @@
-import { Text, View } from "react-native";
-
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProfileScreenContent } from "@/components/profile/ProfileScreenContent";
 
 export default function AdminProfilScreen() {
     return (
         <ProtectedRoute allowedRoles={["admin"]}>
-            <View className="flex-1 justify-center bg-secondary px-6">
-                <Text className="mb-2 text-3xl font-extrabold text-dark">
-                    Data Profil
-                </Text>
-            </View>
+            <ProfileScreenContent
+                role="admin"
+                title="Profil Admin"
+                subtitle="Data akun bersifat baca-saja. Kamu hanya dapat mengubah password."
+            />
         </ProtectedRoute>
     );
 }

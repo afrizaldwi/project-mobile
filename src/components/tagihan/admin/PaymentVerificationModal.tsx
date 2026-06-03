@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import * as Linking from "expo-linking";
 import { PendingPembayaranItem } from "@/api/tagihanApi";
+import { normalizeStorageUrl } from "@/utils/storageUrl";
 
 interface PaymentVerificationModalProps {
   visible: boolean;
@@ -38,6 +39,8 @@ export const PaymentVerificationModal: React.FC<PaymentVerificationModalProps> =
   handleVerify,
   onClose,
 }) => {
+  const buktiBayarUrl = normalizeStorageUrl(preview?.bukti_bayar_url ?? preview?.bukti_bayar);
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
@@ -80,16 +83,16 @@ export const PaymentVerificationModal: React.FC<PaymentVerificationModalProps> =
                 </View>
               </View>
 
-              {preview.bukti_bayar_url ? (
+              {buktiBayarUrl ? (
                 <>
                   <TouchableOpacity
                     onPress={() =>
-                      Linking.openURL(preview.bukti_bayar_url!.replace("localhost", "192.168.100.7"))
+                      Linking.openURL(buktiBayarUrl!)
                     }
                   >
-                    {/\.(jpg|jpeg|png|webp)$/i.test(preview.bukti_bayar_url) ? (
+                    {/\.(jpg|jpeg|png|webp)$/i.test(buktiBayarUrl) ? (
                       <Image
-                        source={{ uri: preview.bukti_bayar_url.replace("localhost", "192.168.100.7") }}
+                        source={{ uri: buktiBayarUrl }}
                         style={{ width: "100%", height: 200, borderRadius: 12, marginBottom: 10 }}
                         resizeMode="contain"
                       />

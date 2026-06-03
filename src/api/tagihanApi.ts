@@ -7,7 +7,7 @@ export interface TagihanReminderItem {
   tanggal_tagihan: string;
   tanggal_jatuh_tempo: string;
   total_tagihan: string | number;
-  status_tagihan: string;
+  status_tagihan: "belum_bayar" | "pending" | "telat" | "lunas" | "dibatalkan" | string;
   pembayaran_terbaru?: PembayaranTerbaru | null;
   penyewa: {
     id: number | null;
@@ -82,9 +82,7 @@ export const tagihanApi = {
   },
 
   async uploadPaymentProof(idTagihan: number, payload: FormData) {
-    const res = await apiClient.post(`/penyewa/tagihan/${idTagihan}/bayar`, payload, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    const res = await apiClient.post(`/penyewa/tagihan/${idTagihan}/bayar`, payload);
     return res.data;
   },
 

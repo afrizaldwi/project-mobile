@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Kelompok-4-Mobile",
+    "jsEngine": "hermes",
     "slug": "Kelompok-4-Mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,6 +14,7 @@
     },
     "android": {
       "usesCleartextTraffic": true,
+      "jsEngine": "hermes",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

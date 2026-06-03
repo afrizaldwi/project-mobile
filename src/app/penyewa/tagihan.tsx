@@ -1,5 +1,6 @@
-﻿import * as ImagePicker from "expo-image-picker";
-import { useEffect, useMemo, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,15 +11,16 @@ import {
   View,
 } from "react-native";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { tagihanApi } from "@/api/tagihanApi";
+import { invoiceApi } from "@/api/invoice";
 import type { NotifikasiItem, TagihanReminderItem } from "@/api/tagihanApi";
+import { tagihanApi } from "@/api/tagihanApi";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PaymentFacade } from "@/services/PaymentFacade";
+import { fileAssetToUploadFile, imageAssetToUploadFile, type UploadFilePayload } from "@/utils/uploadFile";
 
-// Import modular components
 import { ActiveTagihanCard } from "@/components/tagihan/penyewa/ActiveTagihanCard";
-import { RiwayatPembayaranList } from "@/components/tagihan/penyewa/RiwayatPembayaranList";
 import { PaymentUploadModal } from "@/components/tagihan/penyewa/PaymentUploadModal";
+import { RiwayatPembayaranList } from "@/components/tagihan/penyewa/RiwayatPembayaranList";
 import { TenantNotificationModal } from "@/components/tagihan/penyewa/TenantNotificationModal";
 
 export default function PenyewaTagihanScreen() {
@@ -28,19 +30,23 @@ export default function PenyewaTagihanScreen() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [metode, setMetode] = useState("");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [proofFile, setProofFile] = useState<UploadFilePayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
+
+  const isPaidOrVerified = useCallback((item: TagihanReminderItem) =>
+    item.status_tagihan === "lunas" || item.pembayaran_terbaru?.status_verifikasi === "diterima", []);
 
   const activeTagihan = useMemo(
-    () => tagihan.filter((item) => item.status_tagihan !== "lunas"),
-    [tagihan]
+    () => tagihan.filter((item) => !isPaidOrVerified(item)),
+    [tagihan, isPaidOrVerified]
   );
   const riwayat = useMemo(
-    () => tagihan.filter((item) => item.status_tagihan === "lunas"),
-    [tagihan]
+    () => tagihan.filter((item) => isPaidOrVerified(item)),
+    [tagihan, isPaidOrVerified]
   );
 
   const fetchData = async () => {
@@ -70,24 +76,63 @@ export default function PenyewaTagihanScreen() {
     fetchData();
   };
 
-  const handlePickImage = async () => {
+  const handlePickProofImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Izin Diperlukan", "Izinkan akses galeri untuk upload bukti bayar.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       quality: 0.7,
     });
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      setProofFile(imageAssetToUploadFile(result.assets[0], "bukti_bayar"));
     }
+  };
+
+  const handlePickProofPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "application/pdf",
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const file = fileAssetToUploadFile(
+        {
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType || "application/pdf",
+        },
+        "bukti_bayar"
+      );
+
+      setProofFile({
+        ...file,
+        name: file.name.toLowerCase().endsWith(".pdf") ? file.name : file.name + ".pdf",
+        type: "application/pdf",
+      });
+    }
+  };
+
+  const handlePickImage = async () => {
+    Alert.alert(
+      "Pilih Bukti Pembayaran",
+      "Pilih file gambar atau PDF.",
+      [
+        { text: "Gambar", onPress: handlePickProofImage },
+        { text: "PDF", onPress: handlePickProofPdf },
+        { text: "Batal", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleUpload = async () => {
     if (!selected) return;
-    if (!metode || !imageUri) {
+    if (!metode || !proofFile) {
       Alert.alert("Lengkapi Data", "Pilih metode pembayaran dan bukti bayar.");
       return;
     }
@@ -95,20 +140,16 @@ export default function PenyewaTagihanScreen() {
       setIsUploading(true);
       const formData = new FormData();
       formData.append("metode_pembayaran", metode);
-      // @ts-ignore
-      formData.append("bukti_bayar", {
-        uri: imageUri,
-        name: "bukti_bayar.jpg",
-        type: "image/jpeg",
-      });
+      formData.append("bukti_bayar", proofFile as any);
       await PaymentFacade.uploadProof(selected.id_tagihan, formData);
       Alert.alert("Berhasil", "Bukti pembayaran berhasil dikirim. Menunggu verifikasi admin.");
       setShowPaymentModal(false);
       setSelected(null);
       setMetode("");
-      setImageUri(null);
+      setProofFile(null);
       fetchData();
     } catch (error: any) {
+      console.log(error);
       const msg =
         error?.response?.data?.errors
           ? Object.values(error.response.data.errors).flat().join("\n")
@@ -116,6 +157,22 @@ export default function PenyewaTagihanScreen() {
       Alert.alert("Gagal", msg);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (item: TagihanReminderItem) => {
+    const paymentId = item.pembayaran_terbaru?.id_pembayaran;
+    if (!paymentId) {
+      Alert.alert("Invoice Belum Tersedia", "Data pembayaran untuk invoice ini belum tersedia.");
+      return;
+    }
+    try {
+      setDownloadingInvoiceId(paymentId);
+      await invoiceApi.downloadPenyewaInvoicePdf(paymentId, item.kode_invoice || "invoice");
+    } catch (error: any) {
+      Alert.alert("Gagal Mengunduh", error?.message || "Gagal mengunduh invoice PDF.");
+    } finally {
+      setDownloadingInvoiceId(null);
     }
   };
 
@@ -136,7 +193,6 @@ export default function PenyewaTagihanScreen() {
 
   return (
     <ProtectedRoute allowedRoles={["penyewa"]}>
-      {/* Modular Tenant Notification Modal */}
       <TenantNotificationModal
         visible={showNotifModal}
         notifications={notifications}
@@ -145,19 +201,19 @@ export default function PenyewaTagihanScreen() {
         onClose={() => setShowNotifModal(false)}
       />
 
-      {/* Modular Payment Upload Modal */}
       <PaymentUploadModal
         visible={showPaymentModal}
         selectedTagihan={selected}
         metode={metode}
         setMetode={setMetode}
-        imageUri={imageUri}
+        imageUri={proofFile?.type === "application/pdf" ? null : proofFile?.uri ?? null}
+        fileName={proofFile?.name ?? null}
         handlePickImage={handlePickImage}
         handleUpload={handleUpload}
         isUploading={isUploading}
         onClose={() => {
           setShowPaymentModal(false);
-          setImageUri(null);
+          setProofFile(null);
           setMetode("");
         }}
       />
@@ -167,7 +223,6 @@ export default function PenyewaTagihanScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
       >
         <View style={{ padding: 16 }}>
-          {/* Header */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <View>
               <Text style={{ fontSize: 22, fontWeight: "900", color: "#1a1a1a" }}>
@@ -190,7 +245,7 @@ export default function PenyewaTagihanScreen() {
                 }}
               >
                 <Text style={{ color: "#d97706", fontWeight: "800", fontSize: 12 }}>
-                  🔔 {notifications.length}
+                  Notifikasi {notifications.length}
                 </Text>
               </TouchableOpacity>
             )}
@@ -206,7 +261,6 @@ export default function PenyewaTagihanScreen() {
             <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
           ) : (
             <>
-              {/* Tagihan Aktif */}
               <Text style={{ fontSize: 17, fontWeight: "900", color: "#1a1a1a", marginBottom: 4 }}>
                 Tagihan Aktif
               </Text>
@@ -216,7 +270,6 @@ export default function PenyewaTagihanScreen() {
 
               {activeTagihan.length === 0 ? (
                 <View style={{ backgroundColor: "#f0fdf4", borderRadius: 16, padding: 24, alignItems: "center", marginBottom: 20 }}>
-                  <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                   <Text style={{ fontWeight: "900", color: "#15803d", fontSize: 15 }}>
                     Semua tagihan sudah beres!
                   </Text>
@@ -233,14 +286,17 @@ export default function PenyewaTagihanScreen() {
                       setSelected(selectedItem);
                       setShowPaymentModal(true);
                       setMetode("");
-                      setImageUri(null);
+                      setProofFile(null);
                     }}
                   />
                 ))
               )}
 
-              {/* Modular Riwayat Pembayaran List */}
-              <RiwayatPembayaranList riwayat={riwayat} />
+              <RiwayatPembayaranList
+                riwayat={riwayat}
+                downloadingInvoiceId={downloadingInvoiceId}
+                onDownloadInvoice={handleDownloadInvoice}
+              />
             </>
           )}
         </View>

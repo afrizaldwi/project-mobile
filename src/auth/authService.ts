@@ -6,8 +6,25 @@ import type { LoginPayload, LoginResponse, ProfileResponse, User } from "@/types
 export const createAuthService = (client = apiClient) => {
     return {
         login: async (payload: LoginPayload): Promise<User> => {
-            const response = await client.post<LoginResponse>("/login", payload);
-            await saveToken(response.data.token);
+            const response = await client.post<LoginResponse>(
+                "/login",
+                {
+                    ...payload,
+                    client_type: "mobile",
+                },
+                {
+                    headers: {
+                        "X-Client-Type": "mobile",
+                    },
+                }
+            );
+            const token = response.data.token || response.data.access_token;
+
+            if (!token) {
+                throw new Error("Token login tidak ditemukan dari server.");
+            }
+
+            await saveToken(token);
             return response.data.user;
         },
 

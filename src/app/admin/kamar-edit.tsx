@@ -17,10 +17,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatTanggal, getImageUrl, getKamarById, updateKamar } from "@/api/kamarService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
+import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 const STATUS_OPTIONS: { label: string; value: KamarStatus; color: string }[] = [
     { label: "Tersedia", value: "tersedia", color: "#16a34a" },
     { label: "Terisi", value: "terisi", color: "#dc2626" },
+    { label: "Perbaikan", value: "perbaikan", color: "#d97706" },
 ];
 
 export default function KamarEditScreen() {
@@ -80,10 +82,8 @@ export default function KamarEditScreen() {
         });
         if (!result.canceled && result.assets.length > 0) {
             const asset = result.assets[0];
-            const fileName = asset.uri.split("/").pop() ?? "foto.jpg";
-            const fileType = asset.mimeType ?? "image/jpeg";
             setFotoPreview(asset.uri);
-            setFoto({ uri: asset.uri, name: fileName, type: fileType });
+            setFoto(imageAssetToUploadFile(asset, "foto_kamar"));
             setImageError(false);
         }
     };

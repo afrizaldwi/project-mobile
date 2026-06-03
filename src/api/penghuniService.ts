@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import { Penghuni, PerpanjangPayload } from "@/types/penghuni";
+import { Penghuni, PerpanjangPayload, type PerpanjangResponse } from "@/types/penghuni";
 
 export const PenghuniCommand = {
 
@@ -13,7 +13,8 @@ export const PenghuniCommand = {
         return res.data.data;
     },
 
-    perpanjang: async (id: number, payload: PerpanjangPayload): Promise<void> => {
-        await apiClient.patch(`/admin/sewa/${id}/perpanjang`, payload);
+    perpanjang: async (id: number, payload: PerpanjangPayload): Promise<PerpanjangResponse> => {
+        const res = await apiClient.patch<PerpanjangResponse>(`/admin/sewa/${id}/perpanjang`, payload);
+        return res.data;
     },
 };

@@ -111,7 +111,7 @@ export const LaporanTables: React.FC<LaporanTablesProps> = ({
                       className="text-[10px] text-gray-400 mt-0.5 italic"
                       numberOfLines={1}
                     >
-                      "{item.deskripsi}"
+                      {item.deskripsi}
                     </Text>
                   )}
                 </View>

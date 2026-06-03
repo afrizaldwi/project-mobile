@@ -10,17 +10,19 @@ import {
     View,
 } from "react-native";
 
-import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { createKamar } from "@/api/kamarService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
+import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 const STATUS_OPTIONS: { label: string; value: KamarStatus; color: string }[] = [
     { label: "Tersedia", value: "tersedia", color: "#16a34a" },
     { label: "Terisi", value: "terisi", color: "#dc2626" },
+    { label: "Perbaikan", value: "perbaikan", color: "#d97706" },
 ];
 
 export default function KamarTambahScreen() {
@@ -49,10 +51,8 @@ export default function KamarTambahScreen() {
         });
         if (!result.canceled && result.assets.length > 0) {
             const asset = result.assets[0];
-            const fileName = asset.uri.split("/").pop() ?? "foto.jpg";
-            const fileType = asset.mimeType ?? "image/jpeg";
             setFotoPreview(asset.uri);
-            setFoto({ uri: asset.uri, name: fileName, type: fileType });
+            setFoto(imageAssetToUploadFile(asset, "foto_kamar"));
         }
     };
 
@@ -171,14 +171,12 @@ export default function KamarTambahScreen() {
                                                 ? { backgroundColor: opt.color, borderColor: opt.color }
                                                 : {}
                                         }
-                                        className={`flex-1 items-center rounded-xl border py-2.5 ${
-                                            status === opt.value ? "" : "border-gray-200 bg-gray-50"
-                                        }`}
+                                        className={`flex-1 items-center rounded-xl border py-2.5 ${status === opt.value ? "" : "border-gray-200 bg-gray-50"
+                                            }`}
                                     >
                                         <Text
-                                            className={`text-xs font-semibold ${
-                                                status === opt.value ? "text-white" : "text-gray-500"
-                                            }`}
+                                            className={`text-xs font-semibold ${status === opt.value ? "text-white" : "text-gray-500"
+                                                }`}
                                         >
                                             {opt.label}
                                         </Text>
