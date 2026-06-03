@@ -3,8 +3,8 @@ import { getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 import type { Keluhan } from "@/types";
 import { downloadAndShareFile } from "@/utils/fileDownload";
-import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 
 export interface CreateKeluhanPayload {
@@ -85,21 +85,11 @@ export const createKeluhanService = (client = apiClient) => {
 
             if (payload.images) {
                 payload.images.forEach((image) => {
-                    const uriParts = image.uri.split(".");
-                    const fileType = uriParts[uriParts.length - 1];
-                    const mimeType = image.mimeType || `image/${fileType}`;
-
-                    formData.append("foto_kerusakan[]", {
-                        uri: Platform.OS === "android" ? image.uri : image.uri.replace("file://", ""),
-                        name: `photo.${fileType}`,
-                        type: mimeType,
-                    } as any);
+                    formData.append("foto_kerusakan[]", imageAssetToUploadFile(image, "foto_kerusakan") as any);
                 });
             }
 
-            await client.post("/penyewa/keluhan", formData, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
+            await client.post("/penyewa/keluhan", formData);
         },
     };
 };

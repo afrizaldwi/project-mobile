@@ -8,6 +8,7 @@ interface PaymentUploadModalProps {
   metode: string;
   setMetode: (m: string) => void;
   imageUri: string | null;
+  fileName?: string | null;
   handlePickImage: () => void;
   handleUpload: () => void;
   isUploading: boolean;
@@ -30,11 +31,14 @@ export const PaymentUploadModal: React.FC<PaymentUploadModalProps> = ({
   metode,
   setMetode,
   imageUri,
+  fileName,
   handlePickImage,
   handleUpload,
   isUploading,
   onClose,
 }) => {
+  const hasSelectedFile = Boolean(fileName || imageUri);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
@@ -89,20 +93,20 @@ export const PaymentUploadModal: React.FC<PaymentUploadModalProps> = ({
                 style={{
                   borderWidth: 2,
                   borderStyle: "dashed",
-                  borderColor: imageUri ? "#3b82f6" : "#d1d5db",
+                  borderColor: hasSelectedFile ? "#3b82f6" : "#d1d5db",
                   borderRadius: 12,
                   padding: 16,
                   alignItems: "center",
                   marginBottom: 16,
-                  backgroundColor: imageUri ? "#eff6ff" : "#f9fafb",
+                  backgroundColor: hasSelectedFile ? "#eff6ff" : "#f9fafb",
                 }}
               >
                 <Text style={{ fontSize: 28, marginBottom: 4 }}>📎</Text>
-                <Text style={{ fontWeight: "800", color: imageUri ? "#1d4ed8" : "#374151", fontSize: 13 }}>
-                  {imageUri ? "Foto terpilih ✓" : "Pilih Bukti Bayar"}
+                <Text style={{ fontWeight: "800", color: hasSelectedFile ? "#1d4ed8" : "#374151", fontSize: 13 }}>
+                  {fileName || (imageUri ? "Gambar terpilih" : "Pilih Bukti Pembayaran (Gambar/PDF)")}
                 </Text>
                 <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
-                  JPG atau PNG dari galeri
+                  JPG, JPEG, PNG, atau PDF
                 </Text>
               </TouchableOpacity>
 

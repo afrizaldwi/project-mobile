@@ -1,4 +1,5 @@
 // src/api/invoice.ts
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { apiClient } from "@/api/client";
@@ -55,21 +56,15 @@ async function downloadAndSharePdf(fullUrl: string, kodeInvoice: string) {
     const token = await getToken();
     const fileName = `${kodeInvoice || "invoice"}.pdf`;
 
-    // Dinamis import supaya bypass TypeScript type check
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const FS = require("expo-file-system");
+    const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
 
-    const dir: string =
-        FS.documentDirectory ??
-        FS.cacheDirectory ??
-        FS.temporaryDirectory ??
-        "";
+    if (!dir) {
+        throw new Error("Penyimpanan lokal tidak tersedia di perangkat ini.");
+    }
 
-    if (!dir) throw new Error("Storage tidak tersedia di perangkat ini");
+    const fileUri = dir + fileName;
 
-    const fileUri: string = dir + fileName;
-
-    const result = await FS.downloadAsync(fullUrl, fileUri, {
+    const result = await FileSystem.downloadAsync(fullUrl, fileUri, {
         headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/pdf",
@@ -81,7 +76,9 @@ async function downloadAndSharePdf(fullUrl: string, kodeInvoice: string) {
     }
 
     const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) throw new Error("Sharing tidak tersedia");
+    if (!canShare) {
+        throw new Error("Fitur berbagi file tidak tersedia di perangkat ini.");
+    }
 
     await Sharing.shareAsync(result.uri, {
         mimeType: "application/pdf",

@@ -12,7 +12,7 @@ import {
     View,
 } from "react-native";
 
-import { API_BASE_URL } from "@/constants/env";
+import { normalizeStorageUrl } from "@/utils/storageUrl";
 import { Keluhan } from "@/types";
 
 interface KeluhanCardProps {
@@ -27,16 +27,17 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
     const [isViewerVisible, setIsViewerVisible] = useState(false);
     const [viewerStartIndex, setViewerStartIndex] = useState(0);
     const [modalActiveIndex, setModalActiveIndex] = useState(0);
-    
+
     // Grid item detail modal visibility
     const [isDetailVisible, setIsDetailVisible] = useState(false);
-    
+
     // Parse image URLs
     let imageUrls: string[] = [];
     if (keluhan.foto_kerusakan) {
         const paths = keluhan.foto_kerusakan.split(",");
-        const basePath = API_BASE_URL.replace("/api", "");
-        imageUrls = paths.map(path => `${basePath}/storage/${path.trim()}`);
+        imageUrls = paths
+            .map((path) => normalizeStorageUrl(path.trim()))
+            .filter((url): url is string => Boolean(url));
     }
 
     const statusBadgeColors = {
@@ -75,13 +76,13 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
             "Apakah Anda yakin ingin menghapus keluhan ini?",
             [
                 { text: "Batal", style: "cancel" },
-                { 
-                    text: "Hapus", 
-                    style: "destructive", 
+                {
+                    text: "Hapus",
+                    style: "destructive",
                     onPress: () => {
                         setIsDetailVisible(false);
                         onDelete?.(keluhan.id_keluhan);
-                    } 
+                    }
                 },
             ]
         );
@@ -92,26 +93,26 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
             "Update Status",
             "Pilih status terbaru untuk keluhan ini:",
             [
-                { 
-                    text: "Pending", 
+                {
+                    text: "Pending",
                     onPress: () => {
                         onUpdateStatus?.(keluhan.id_keluhan, "pending");
                         setIsDetailVisible(false);
-                    } 
+                    }
                 },
-                { 
-                    text: "Proses", 
+                {
+                    text: "Proses",
                     onPress: () => {
                         onUpdateStatus?.(keluhan.id_keluhan, "proses");
                         setIsDetailVisible(false);
-                    } 
+                    }
                 },
-                { 
-                    text: "Selesai", 
+                {
+                    text: "Selesai",
                     onPress: () => {
                         onUpdateStatus?.(keluhan.id_keluhan, "selesai");
                         setIsDetailVisible(false);
-                    } 
+                    }
                 },
                 { text: "Batal", style: "cancel" },
             ]
@@ -156,25 +157,25 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                     /* No image: Premium visual design with watermark and themed colors */
                     <View className={`flex-1 ${noImageBg[keluhan.status_keluhan] || "bg-gray-50"} justify-between p-3 relative overflow-hidden`}>
                         <View className="absolute -right-8 -bottom-8 opacity-15">
-                            <Ionicons 
-                                name={statusIcons[keluhan.status_keluhan] || "document-text-outline"} 
-                                size={120} 
-                                color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"} 
+                            <Ionicons
+                                name={statusIcons[keluhan.status_keluhan] || "document-text-outline"}
+                                size={120}
+                                color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"}
                             />
                         </View>
-                        
+
                         <View className="flex-row items-center">
-                            <Ionicons 
-                                name={statusIcons[keluhan.status_keluhan] || "document-text-outline"} 
-                                size={18} 
-                                color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"} 
+                            <Ionicons
+                                name={statusIcons[keluhan.status_keluhan] || "document-text-outline"}
+                                size={18}
+                                color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"}
                             />
                         </View>
 
                         <View className="z-10">
-                            <Text 
-                                className="text-xs font-extrabold leading-tight" 
-                                style={{ color: noImageIconColor[keluhan.status_keluhan] || "#374151" }} 
+                            <Text
+                                className="text-xs font-extrabold leading-tight"
+                                style={{ color: noImageIconColor[keluhan.status_keluhan] || "#374151" }}
                                 numberOfLines={2}
                             >
                                 {keluhan.judul_keluhan}
@@ -221,7 +222,7 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                                 className="h-full w-full"
                             >
                                 {imageUrls.map((url, idx) => (
-                                    <Pressable 
+                                    <Pressable
                                         key={idx}
                                         onPress={() => {
                                             setViewerStartIndex(idx);
@@ -237,7 +238,7 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                                     </Pressable>
                                 ))}
                             </ScrollView>
-                            
+
                             {/* Horizontal Pagination Indicator Dots */}
                             {imageUrls.length > 1 && (
                                 <View className="absolute bottom-4 left-0 right-0 flex-row justify-center space-x-1.5 z-20">
@@ -274,10 +275,10 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                         /* No Image: Beautiful styled banner with matching status color and large icon watermark */
                         <View className={`relative h-48 w-full ${noImageBg[keluhan.status_keluhan]} justify-end p-6 overflow-hidden`}>
                             <View className="absolute -right-8 -top-8 opacity-15">
-                                <Ionicons 
-                                    name={statusIcons[keluhan.status_keluhan] || "document-text-outline"} 
-                                    size={160} 
-                                    color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"} 
+                                <Ionicons
+                                    name={statusIcons[keluhan.status_keluhan] || "document-text-outline"}
+                                    size={160}
+                                    color={noImageIconColor[keluhan.status_keluhan] || "#6b7280"}
                                 />
                             </View>
 
@@ -297,8 +298,8 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                                     </Text>
                                 </View>
                             </View>
-                            
-                            <Text 
+
+                            <Text
                                 className="text-2xl font-extrabold z-10"
                                 style={{ color: noImageIconColor[keluhan.status_keluhan] || "#1f2937" }}
                             >
@@ -312,7 +313,7 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                         {imageUrls.length > 0 && (
                             <Text className="mb-2 text-2xl font-extrabold text-dark">{keluhan.judul_keluhan}</Text>
                         )}
-                        
+
                         <View className="mb-6 flex-row items-center justify-between border-b border-gray-100 pb-4">
                             <View className="flex-row items-center">
                                 <Ionicons name="calendar-outline" size={16} color="#6b7280" />
@@ -393,7 +394,7 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                             <Ionicons name="close" size={24} color="white" />
                         </Pressable>
                     </SafeAreaView>
-                    
+
                     <ScrollView
                         horizontal
                         pagingEnabled
@@ -410,8 +411,8 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                         className="w-full h-full"
                     >
                         {imageUrls.map((url, idx) => (
-                            <View 
-                                key={idx} 
+                            <View
+                                key={idx}
                                 style={{ width: Dimensions.get("window").width, height: Dimensions.get("window").height }}
                                 className="justify-center items-center"
                             >
@@ -423,7 +424,7 @@ export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus
                             </View>
                         ))}
                     </ScrollView>
-                    
+
                     {/* Full screen modal swiper indicator */}
                     {imageUrls.length > 1 && (
                         <View className="absolute bottom-12 left-0 right-0 flex-row justify-center space-x-2">

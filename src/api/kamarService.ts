@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import { apiClient } from "@/api/client";
-import { API_BASE_URL } from "@/constants/env";
+import { normalizeStorageUrl } from "@/utils/storageUrl";
 import type {
     Kamar,
     KamarListResponse,
@@ -126,7 +126,10 @@ export async function getAllKamar(): Promise<KamarListResponse> {
                         body.terisi ??
                         rooms.filter((r) => String(r.status_kamar).toLowerCase() === "terisi")
                             .length,
-                    perbaikan: body.perbaikan ?? 0,
+                    perbaikan:
+                        body.perbaikan ??
+                        rooms.filter((r) => String(r.status_kamar).toLowerCase() === "perbaikan")
+                            .length,
                 };
             }
         } catch (error) {
@@ -166,9 +169,7 @@ export async function createKamar(payload: KamarPayload): Promise<Kamar> {
     if (payload.foto_kamar) {
         formData.append("foto_kamar", payload.foto_kamar as any);
     }
-    const res = await apiClient.post<{ data: Kamar }>("/admin/kamar", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-    });
+    const res = await apiClient.post<{ data: Kamar }>("/admin/kamar", formData);
     return res.data.data;
 }
 
@@ -183,9 +184,7 @@ export async function updateKamar(id: number, payload: KamarPayload): Promise<Ka
     if (payload.foto_kamar) {
         formData.append("foto_kamar", payload.foto_kamar as any);
     }
-    const res = await apiClient.post<{ data: Kamar }>(`/admin/kamar/${id}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-    });
+    const res = await apiClient.post<{ data: Kamar }>(`/admin/kamar/${id}`, formData);
     return res.data.data;
 }
 
@@ -194,10 +193,7 @@ export async function deleteKamar(id: number): Promise<void> {
 }
 
 export function getImageUrl(path: string | null): string | null {
-    if (!path) return null;
-    if (path.startsWith("http://") || path.startsWith("https://")) return path;
-    const base = API_BASE_URL.replace(/\/api\/?$/, "");
-    return `${base}/storage/${path.replace(/^\/+/, "")}`;
+    return normalizeStorageUrl(path);
 }
 
 export function getStatusBadge(status: KamarStatus) {
@@ -212,6 +208,18 @@ export function getStatusBadge(status: KamarStatus) {
             return {
                 label: "Terisi",
                 bgColor: "#dc2626",
+                textColor: "#ffffff",
+            };
+        case "perbaikan":
+            return {
+                label: "Perbaikan",
+                bgColor: "#d97706",
+                textColor: "#ffffff",
+            };
+        default:
+            return {
+                label: "Tidak Dikenal",
+                bgColor: "#6b7280",
                 textColor: "#ffffff",
             };
     }

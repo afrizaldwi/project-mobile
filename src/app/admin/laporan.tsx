@@ -1,14 +1,14 @@
-﻿import React, { useState } from "react";
+﻿import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useLaporanKeuangan } from "@/hooks/useLaporanKeuangan";
 
 // Import extracted components
-import { LaporanSummaryCards } from "@/components/laporan/LaporanSummaryCards";
-import { LaporanFilterModal } from "@/components/laporan/LaporanFilterModal";
 import { FormTambahPengeluaran } from "@/components/laporan/FormTambahPengeluaran";
+import { LaporanFilterModal } from "@/components/laporan/LaporanFilterModal";
+import { LaporanSummaryCards } from "@/components/laporan/LaporanSummaryCards";
 import { LaporanTables } from "@/components/laporan/LaporanTables";
 
 export default function AdminLaporanScreen() {
@@ -99,15 +99,6 @@ export default function AdminLaporanScreen() {
                             >
                                 <Ionicons name="add" size={18} color="white" />
                                 <Text className="text-white font-black text-sm ml-1">+ Catat Pengeluaran</Text>
-                            </TouchableOpacity>
-
-                            {/* Cetak CSV Button (Disabled Placeholder) */}
-                            <TouchableOpacity
-                                disabled={true}
-                                className="flex-1 border border-gray-200 bg-gray-50 py-3 rounded-xl flex-row items-center justify-center opacity-60"
-                            >
-                                <Ionicons name="download-outline" size={16} color="#9ca3af" />
-                                <Text className="text-gray-400 font-black text-sm ml-1">Cetak CSV</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

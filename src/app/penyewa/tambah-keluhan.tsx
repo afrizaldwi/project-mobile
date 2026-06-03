@@ -17,6 +17,7 @@ import {
 
 import { apiClient } from "@/api/client";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 export default function TambahKeluhanScreen() {
     const router = useRouter();
@@ -108,23 +109,10 @@ export default function TambahKeluhanScreen() {
             formData.append("deskripsi_keluhan", deskripsi);
 
             images.forEach((image) => {
-                // Determine file extension and mime type
-                const uriParts = image.uri.split(".");
-                const fileType = uriParts[uriParts.length - 1];
-                const mimeType = image.mimeType || `image/${fileType}`;
-
-                formData.append("foto_kerusakan[]", {
-                    uri: Platform.OS === "android" ? image.uri : image.uri.replace("file://", ""),
-                    name: `photo.${fileType}`,
-                    type: mimeType,
-                } as any);
+                formData.append("foto_kerusakan[]", imageAssetToUploadFile(image, "foto_kerusakan") as any);
             });
 
-            await apiClient.post("/penyewa/keluhan", formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            });
+            await apiClient.post("/penyewa/keluhan", formData);
 
             Alert.alert("Sukses", "Laporan keluhan berhasil dikirim.", [
                 {
@@ -135,7 +123,6 @@ export default function TambahKeluhanScreen() {
                 },
             ]);
         } catch (error: any) {
-            console.error("Failed to submit keluhan:", error);
             Alert.alert(
                 "Error",
                 error.response?.data?.message || "Terjadi kesalahan saat mengirim keluhan."
@@ -147,8 +134,8 @@ export default function TambahKeluhanScreen() {
 
     return (
         <ProtectedRoute allowedRoles={["penyewa"]}>
-            <KeyboardAvoidingView 
-                style={{ flex: 1 }} 
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
                 <ScrollView className="flex-1 bg-secondary">
@@ -188,13 +175,13 @@ export default function TambahKeluhanScreen() {
                                 <Text className="text-sm font-bold text-gray-700">Foto Bukti (Maks. 3)</Text>
                                 <Text className="text-xs text-gray-500">{images.length}/3</Text>
                             </View>
-                            
+
                             <View className="flex-row flex-wrap items-center">
                                 {images.map((img, index) => (
                                     <View key={index} className="relative mb-3 mr-3">
-                                        <Image 
-                                            source={{ uri: img.uri }} 
-                                            className="h-24 w-24 rounded-xl border border-gray-200 bg-gray-100" 
+                                        <Image
+                                            source={{ uri: img.uri }}
+                                            className="h-24 w-24 rounded-xl border border-gray-200 bg-gray-100"
                                         />
                                         <Pressable
                                             onPress={() => removeImage(index)}
@@ -204,7 +191,7 @@ export default function TambahKeluhanScreen() {
                                         </Pressable>
                                     </View>
                                 ))}
-                                
+
                                 {images.length < 3 && (
                                     <Pressable
                                         onPress={handlePickImagePress}

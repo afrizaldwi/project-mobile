@@ -1,11 +1,13 @@
-import axios from "axios";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 
 import { apiClient } from "@/api/client";
 import { getKamarTersedia } from "@/api/kamarService";
 import type { KamarTersedia } from "@/types/kamar";
+import { fileAssetToUploadFile, imageAssetToUploadFile, type UploadFilePayload } from "@/utils/uploadFile";
 
 export type TipeKamarGroup = string;
 
@@ -18,6 +20,23 @@ export type RoomGroupData = {
     harga: number;
     fasilitas: string;
     kamar: RoomOption[];
+};
+
+type MetodePembayaran = "Tunai" | "Transfer Bank" | "E-Wallet";
+
+type CreatePenghuniResponse = {
+    message?: string;
+    credentials?: {
+        email?: string;
+        temporary_password?: string;
+    };
+};
+
+export type CreatedPenghuniCredentials = {
+    email: string;
+    temporaryPassword: string;
+    noHp: string;
+    nama: string;
 };
 
 /** Ambil grup tipe dari nomor kamar (A-01, B12, dll). Non A/B/C → "Lainnya" */
@@ -42,36 +61,56 @@ const getTodayInputDate = () => {
 
 const formatDateForApi = (value: string) => {
     if (!value) return value;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (value.length === 10 && value.charAt(4) === "-" && value.charAt(7) === "-") return value;
     if (value.includes("/")) {
         const [month, day, year] = value.split("/");
         if (month && day && year) {
-            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+            return year + "-" + month.padStart(2, "0") + "-" + day.padStart(2, "0");
         }
     }
     return value;
 };
 
-const PENGHUNI_POST_PATHS = ["/admin/penghuni", "/admin/laporan/penghuni"] as const;
+function normalizeIndonesianPhone(value: string): string | null {
+    const digits = value.replace(/[^\d+]/g, "").replace(/^\+/, "");
+
+    if (digits.startsWith("08")) return "628" + digits.slice(2);
+    if (digits.startsWith("62")) return digits;
+
+    return null;
+}
+
+function buildCredentialMessage(credentials: CreatedPenghuniCredentials): string {
+    return [
+        "Halo " + credentials.nama + ",",
+        "Akun aplikasi Kost Bahagia sudah dibuat.",
+        "Silakan login ke aplikasi menggunakan data berikut:",
+        "Email: " + credentials.email,
+        "Password: " + credentials.temporaryPassword,
+        "Setelah berhasil login, segera ganti password jika menu ubah password sudah tersedia.",
+    ].join("\n");
+}
 
 export function useTambahPenghuni() {
     const router = useRouter();
 
     const [nama, setNama] = useState("");
     const [noHp, setNoHp] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
     const [alamatAsal, setAlamatAsal] = useState("");
 
     const [tipeKamar, setTipeKamar] = useState<TipeKamarGroup | null>(null);
     const [kamar, setKamar] = useState("");
     const [tglMasuk, setTglMasuk] = useState(getTodayInputDate);
     const [durasiBulan, setDurasiBulan] = useState("1");
+    const [metodePembayaran, setMetodePembayaran] = useState<MetodePembayaran>("Transfer Bank");
+    const [buktiBayar, setBuktiBayar] = useState<UploadFilePayload | null>(null);
+    const [buktiBayarPreview, setBuktiBayarPreview] = useState<string | null>(null);
 
     const [availableRooms, setAvailableRooms] = useState<KamarTersedia[]>([]);
     const [isLoadingRooms, setIsLoadingRooms] = useState(true);
     const [roomsError, setRoomsError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [createdCredentials, setCreatedCredentials] = useState<CreatedPenghuniCredentials | null>(null);
 
     const fetchAvailableRooms = useCallback(async () => {
         try {
@@ -188,15 +227,75 @@ export function useTambahPenghuni() {
         }
     }, [tglMasuk, durasiBulan]);
 
+    const pickBuktiBayarImage = async () => {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+            Alert.alert("Izin Diperlukan", "Izinkan akses galeri untuk memilih bukti bayar.");
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets.length > 0) {
+            const asset = result.assets[0];
+            setBuktiBayar(imageAssetToUploadFile(asset, "bukti_bayar"));
+            setBuktiBayarPreview(asset.uri);
+        }
+    };
+
+    const pickBuktiBayarPdf = async () => {
+        const result = await DocumentPicker.getDocumentAsync({
+            type: "application/pdf",
+            copyToCacheDirectory: true,
+            multiple: false,
+        });
+
+        if (!result.canceled && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const file = fileAssetToUploadFile(
+                {
+                    uri: asset.uri,
+                    name: asset.name,
+                    mimeType: asset.mimeType || "application/pdf",
+                },
+                "bukti_bayar"
+            );
+
+            setBuktiBayar({
+                ...file,
+                name: file.name.toLowerCase().endsWith(".pdf") ? file.name : file.name + ".pdf",
+                type: "application/pdf",
+            });
+            setBuktiBayarPreview(null);
+        }
+    };
+
+    const pickBuktiBayar = async () => {
+        Alert.alert(
+            "Pilih Bukti Pembayaran",
+            "Pilih file gambar atau PDF.",
+            [
+                { text: "Gambar", onPress: pickBuktiBayarImage },
+                { text: "PDF", onPress: pickBuktiBayarPdf },
+                { text: "Batal", style: "cancel" },
+            ],
+            { cancelable: true }
+        );
+    };
+
     const handleSave = async () => {
         if (
             !nama.trim() ||
             !noHp.trim() ||
-            !email.trim() ||
-            !password.trim() ||
+            !alamatAsal.trim() ||
             !kamar ||
             !tglMasuk ||
-            !durasiBulan
+            !durasiBulan ||
+            !metodePembayaran ||
+            !buktiBayar
         ) {
             Alert.alert("Error", "Semua kolom bertanda * wajib diisi.");
             return;
@@ -223,42 +322,27 @@ export function useTambahPenghuni() {
             return;
         }
 
-        setIsSaving(true);
-
-        const payload = {
-            nama_lengkap: nama.trim(),
-            email: email.trim(),
-            password,
-            no_hp: noHp.trim(),
-            alamat_asal: alamatAsal.trim() || null,
-            id_kamar: parsedKamarId,
-            tanggal_masuk: formatDateForApi(tglMasuk),
-            durasi_sewa_bulan: parsedDurasi,
-            harga_deal: totalTagihan,
-        };
+        const formData = new FormData();
+        formData.append("nama_lengkap", nama.trim());
+        formData.append("no_hp", noHp.trim());
+        formData.append("alamat_asal", alamatAsal.trim());
+        formData.append("id_kamar", String(parsedKamarId));
+        formData.append("tanggal_masuk", formatDateForApi(tglMasuk));
+        formData.append("durasi_sewa_bulan", String(parsedDurasi));
+        formData.append("metode_pembayaran", metodePembayaran);
+        formData.append("bukti_bayar", buktiBayar as any);
 
         try {
-            let saved = false;
-            let lastError: unknown;
+            setIsSaving(true);
+            const response = await apiClient.post<CreatePenghuniResponse>("/admin/penghuni", formData);
+            const credentials = response.data.credentials;
 
-            for (const path of PENGHUNI_POST_PATHS) {
-                try {
-                    await apiClient.post(path, payload);
-                    saved = true;
-                    break;
-                } catch (error) {
-                    lastError = error;
-                    if (axios.isAxiosError(error) && error.response?.status === 404) {
-                        continue;
-                    }
-                    throw error;
-                }
-            }
-
-            if (!saved) throw lastError;
-
-            Alert.alert("Sukses", "Penghuni baru berhasil disimpan.");
-            router.back();
+            setCreatedCredentials({
+                email: credentials?.email || "-",
+                temporaryPassword: credentials?.temporary_password || "-",
+                noHp: noHp.trim(),
+                nama: nama.trim(),
+            });
         } catch (error: unknown) {
             const err = error as {
                 response?: { data?: { errors?: Record<string, string[]>; message?: string } };
@@ -283,15 +367,37 @@ export function useTambahPenghuni() {
         }
     };
 
+    const sendCredentialsToWhatsApp = async () => {
+        if (!createdCredentials) return;
+
+        const phone = normalizeIndonesianPhone(createdCredentials.noHp);
+        if (!phone) {
+            Alert.alert("Nomor Tidak Valid", "Nomor WhatsApp penyewa harus diawali 08, 62, atau +62.");
+            return;
+        }
+
+        const message = encodeURIComponent(buildCredentialMessage(createdCredentials));
+        const deepLink = "whatsapp://send?phone=" + phone + "&text=" + message;
+        const webLink = "https://wa.me/" + phone + "?text=" + message;
+
+        try {
+            const canOpenWhatsApp = await Linking.canOpenURL(deepLink);
+            await Linking.openURL(canOpenWhatsApp ? deepLink : webLink);
+        } catch {
+            await Linking.openURL(webLink);
+        }
+    };
+
+    const finishCreatedPenghuni = () => {
+        setCreatedCredentials(null);
+        router.back();
+    };
+
     return {
         nama,
         setNama,
         noHp,
         setNoHp,
-        email,
-        setEmail,
-        password,
-        setPassword,
         alamatAsal,
         setAlamatAsal,
         tipeKamar,
@@ -302,6 +408,14 @@ export function useTambahPenghuni() {
         setTglMasuk,
         durasiBulan,
         setDurasiBulan,
+        metodePembayaran,
+        setMetodePembayaran,
+        buktiBayar,
+        buktiBayarPreview,
+        pickBuktiBayar,
+        createdCredentials,
+        sendCredentialsToWhatsApp,
+        finishCreatedPenghuni,
         totalTagihan,
         estimasiCheckOut,
         formatCurrency,

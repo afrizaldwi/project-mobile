@@ -1,16 +1,14 @@
-import { Text, View } from "react-native";
-
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProfileScreenContent } from "@/components/profile/ProfileScreenContent";
 
 export default function PenyewaProfilScreen() {
-
     return (
         <ProtectedRoute allowedRoles={["penyewa"]}>
-            <View className="flex-1 justify-center bg-secondary px-6">
-                <Text className="mb-2 text-3xl font-extrabold text-dark">
-                    Penyewa profil
-                </Text>
-            </View>
+            <ProfileScreenContent
+                role="penyewa"
+                title="Profil Penyewa"
+                subtitle="Data identitas dan sewa bersifat baca-saja. Kamu hanya dapat mengubah password."
+            />
         </ProtectedRoute>
     );
 }

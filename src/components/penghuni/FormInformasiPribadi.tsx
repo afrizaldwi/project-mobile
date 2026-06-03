@@ -6,10 +6,6 @@ interface FormInformasiPribadiProps {
     setNama: (val: string) => void;
     noHp: string;
     setNoHp: (val: string) => void;
-    email: string;
-    setEmail: (val: string) => void;
-    password: string;
-    setPassword: (val: string) => void;
     alamatAsal: string;
     setAlamatAsal: (val: string) => void;
 }
@@ -19,10 +15,6 @@ export const FormInformasiPribadi: React.FC<FormInformasiPribadiProps> = ({
     setNama,
     noHp,
     setNoHp,
-    email,
-    setEmail,
-    password,
-    setPassword,
     alamatAsal,
     setAlamatAsal,
 }) => {
@@ -36,10 +28,7 @@ export const FormInformasiPribadi: React.FC<FormInformasiPribadiProps> = ({
                     <TextInput
                         className="border border-gray-200 rounded-lg p-3 text-dark bg-gray-50 text-sm"
                         value={nama}
-                        onChangeText={(text) => {
-                            setNama(text);
-                            setEmail(text.toLowerCase().replace(/\s+/g, '') + "@kost.com");
-                        }}
+                        onChangeText={setNama}
                     />
                 </View>
                 <View className="flex-1 ml-2">
@@ -53,31 +42,8 @@ export const FormInformasiPribadi: React.FC<FormInformasiPribadiProps> = ({
                 </View>
             </View>
 
-            <View className="flex-row justify-between mb-4">
-                <View className="flex-1 mr-2">
-                    <Text className="text-sm font-bold text-gray-600 mb-1">Email *</Text>
-                    <TextInput
-                        className="border border-gray-200 rounded-lg p-3 text-dark bg-gray-50 text-sm"
-                        keyboardType="email-address"
-                        value={email}
-                        onChangeText={setEmail}
-                    />
-                    <Text className="text-[10px] text-gray-400 mt-1">Email dibuat otomatis, tapi bisa diedit.</Text>
-                </View>
-                <View className="flex-1 ml-2">
-                    <Text className="text-sm font-bold text-gray-600 mb-1">Password *</Text>
-                    <TextInput
-                        className="border border-gray-200 rounded-lg p-3 text-dark bg-gray-50 text-sm"
-                        secureTextEntry
-                        value={password}
-                        onChangeText={setPassword}
-                    />
-                    <Text className="text-[10px] text-gray-400 mt-1">Berikan password ini kepada penghuni.</Text>
-                </View>
-            </View>
-
             <View className="mb-2">
-                <Text className="text-sm font-bold text-gray-600 mb-1">Alamat Asal</Text>
+                <Text className="text-sm font-bold text-gray-600 mb-1">Alamat Asal *</Text>
                 <TextInput
                     className="border border-gray-200 rounded-lg p-3 text-dark bg-gray-50 text-sm text-top h-24"
                     multiline

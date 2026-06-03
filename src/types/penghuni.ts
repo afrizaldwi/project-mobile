@@ -1,4 +1,4 @@
-export type StatusSewa = "aktif" | "nonaktif";
+export type StatusSewa = "aktif" | "selesai" | "dibatalkan";
 
 export type Penghuni = {
     id_sewa: number;
@@ -20,6 +20,14 @@ export type PerpanjangPayload = {
     tanggal_mulai: string;
     durasi_sewa_bulan: number;
     harga_deal: number;
+};
+
+export type PerpanjangResponse = {
+    message?: string;
+    data?: {
+        sewa?: Penghuni;
+        tagihan?: unknown;
+    };
 };
 
 export class PerpanjanganSewaBuilder {

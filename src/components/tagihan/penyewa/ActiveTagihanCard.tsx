@@ -38,6 +38,12 @@ const canPay = (item: TagihanReminderItem) => {
   return PaymentStateContext.getState(item).canPay();
 };
 
+const getActionLabel = (item: TagihanReminderItem, payable: boolean) => {
+  if (item.status_tagihan === "dibatalkan") return "Tagihan Dibatalkan";
+  if (item.pembayaran_terbaru?.status_verifikasi === "pending") return "Menunggu Verifikasi";
+  return payable ? "Bayar Sekarang" : "Tidak Dapat Dibayar";
+};
+
 export const ActiveTagihanCard: React.FC<ActiveTagihanCardProps> = ({ item, onPay }) => {
   const status = getStatusConfig(item);
   const payable = canPay(item);
@@ -153,9 +159,7 @@ export const ActiveTagihanCard: React.FC<ActiveTagihanCardProps> = ({ item, onPa
         }}
       >
         <Text style={{ color: "#fff", fontWeight: "900", fontSize: 14 }}>
-          {item.pembayaran_terbaru?.status_verifikasi === "pending"
-            ? "⏳ Menunggu Verifikasi"
-            : "💳 Bayar Sekarang"}
+          {getActionLabel(item, payable)}
         </Text>
       </TouchableOpacity>
     </View>

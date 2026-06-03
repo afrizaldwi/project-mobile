@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -11,20 +11,31 @@ import {
 
 import { PenghuniCommand } from "@/api/penghuniService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { PerpanjanganSewaBuilder } from "@/types/penghuni";
+import { PerpanjanganSewaBuilder, type Penghuni as SewaExtensionDetail } from "@/types/penghuni";
 
 function formatRupiah(angka: number): string {
     return "Rp " + Number(angka).toLocaleString("id-ID");
 }
 
-function formatTanggalDisplay(tanggal: string): string {
-    if (!tanggal) return "-";
+function formatTanggalDisplay(tanggal?: string | null): string {
+    if (!tanggal || tanggal === "—" || tanggal === "-") return "-";
     const tgl = new Date(tanggal);
+    if (Number.isNaN(tgl.getTime())) return "-";
     return tgl.toLocaleDateString("id-ID", {
         day: "numeric",
         month: "short",
         year: "numeric",
     });
+}
+
+function getValidationMessage(error: any): string {
+    const errors = error?.response?.data?.errors;
+    if (errors) {
+        const firstError = Object.values(errors)[0] as string[] | undefined;
+        if (firstError?.[0]) return firstError[0];
+    }
+
+    return error?.response?.data?.message || error?.message || "Terjadi kesalahan. Coba lagi.";
 }
 
 export default function PerpanjangSewaScreen() {
@@ -40,9 +51,45 @@ export default function PerpanjangSewaScreen() {
 
     const [durasi, setDurasi] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [isLoadingDetail, setIsLoadingDetail] = useState(true);
+    const [detail, setDetail] = useState<SewaExtensionDetail | null>(null);
+    const [detailError, setDetailError] = useState<string | null>(null);
 
-    const harga = Number(params.harga_bulanan ?? 0);
-    const tanggalKeluar = params.tanggal_keluar ?? "";
+    const idSewa = Number(params.id_sewa);
+
+    useEffect(() => {
+        if (!idSewa) {
+            setDetailError("ID sewa tidak valid.");
+            setIsLoadingDetail(false);
+            return;
+        }
+
+        let isMounted = true;
+
+        PenghuniCommand.fetchDetail(idSewa)
+            .then((data) => {
+                if (!isMounted) return;
+                setDetail(data);
+                setDetailError(null);
+            })
+            .catch((error: any) => {
+                if (!isMounted) return;
+                setDetailError(getValidationMessage(error));
+            })
+            .finally(() => {
+                if (isMounted) setIsLoadingDetail(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [idSewa]);
+
+    const nama = detail?.nama || params.nama || "-";
+    const nomorKamar = detail?.nomor_kamar || params.nomor_kamar || "-";
+    const tanggalMasuk = detail?.tanggal_masuk || params.tanggal_masuk || "";
+    const tanggalKeluar = detail?.tanggal_keluar || params.tanggal_keluar || "";
+    const harga = Number(detail?.harga_bulanan ?? params.harga_bulanan ?? 0);
 
     const builder = new PerpanjanganSewaBuilder()
         .setTanggalMulai(tanggalKeluar)
@@ -61,19 +108,32 @@ export default function PerpanjangSewaScreen() {
     }
 
     async function handleSimpan() {
+        if (!idSewa) {
+            Alert.alert("Gagal", "ID sewa tidak valid.");
+            return;
+        }
+
+        if (!tanggalKeluar || tanggalKeluar === "—" || tanggalKeluar === "-") {
+            Alert.alert("Gagal", "Tanggal keluar sewa saat ini tidak tersedia.");
+            return;
+        }
+
+        if (!harga || harga <= 0) {
+            Alert.alert("Gagal", "Harga bulanan kamar tidak valid.");
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = builder.build();
-            await PenghuniCommand.perpanjang(Number(params.id_sewa), payload);
+            const response = await PenghuniCommand.perpanjang(idSewa, payload);
             Alert.alert(
                 "Berhasil",
-                "Perpanjangan sewa berhasil disimpan.",
-                [{ text: "OK", onPress: () => router.back() }]
+                response?.message || "Sewa berhasil diperpanjang dan tagihan baru berhasil dibuat.",
+                [{ text: "OK", onPress: () => router.replace("/admin/penghuni") }]
             );
         } catch (err: any) {
-            const msg =
-                err?.response?.data?.message ?? "Terjadi kesalahan. Coba lagi.";
-            Alert.alert("Gagal", msg);
+            Alert.alert("Gagal", getValidationMessage(err));
         } finally {
             setLoading(false);
         }
@@ -90,8 +150,22 @@ export default function PerpanjangSewaScreen() {
                         Perpanjang Sewa
                     </Text>
                     <Text className="mb-4 text-sm text-gray-500">
-                        {params.nama} — Kamar {params.nomor_kamar}
+                        {nama} — Kamar {nomorKamar}
                     </Text>
+
+                    {isLoadingDetail ? (
+                        <View className="mb-3 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                            <Text className="text-xs font-semibold text-primary">Memuat detail sewa terbaru...</Text>
+                        </View>
+                    ) : null}
+
+                    {detailError ? (
+                        <View className="mb-3 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+                            <Text className="text-xs font-semibold text-yellow-700">
+                                {detail ? detailError : "Detail sewa tidak dapat dimuat. " + detailError}
+                            </Text>
+                        </View>
+                    ) : null}
 
                     <View className="mb-3 flex-row gap-3">
                         <View className="flex-1 rounded-xl border border-gray-200 bg-white p-3">
@@ -99,7 +173,7 @@ export default function PerpanjangSewaScreen() {
                                 Nama Penghuni
                             </Text>
                             <Text className="text-sm font-bold text-dark">
-                                {params.nama}
+                                {nama}
                             </Text>
                         </View>
                         <View className="flex-1 rounded-xl border border-gray-200 bg-white p-3">
@@ -107,7 +181,7 @@ export default function PerpanjangSewaScreen() {
                                 Nomor Kamar
                             </Text>
                             <Text className="text-sm font-bold text-dark">
-                                {params.nomor_kamar}
+                                {nomorKamar}
                             </Text>
                         </View>
                     </View>
@@ -117,7 +191,7 @@ export default function PerpanjangSewaScreen() {
                                 Tanggal Masuk
                             </Text>
                             <Text className="text-sm font-bold text-dark">
-                                {formatTanggalDisplay(params.tanggal_masuk)}
+                                {formatTanggalDisplay(tanggalMasuk)}
                             </Text>
                         </View>
                         <View className="flex-1 rounded-xl border border-gray-200 bg-white p-3">
@@ -226,12 +300,12 @@ export default function PerpanjangSewaScreen() {
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={handleSimpan}
-                            disabled={loading}
+                            disabled={loading || isLoadingDetail}
                             className={`flex-[2] items-center rounded-xl py-3 ${
-                                !loading ? "bg-primary" : "bg-gray-300"
+                                !loading && !isLoadingDetail ? "bg-primary" : "bg-gray-300"
                             }`}
                         >
-                            {loading ? (
+                            {loading || isLoadingDetail ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
                                 <Text className="text-sm font-bold text-white">
