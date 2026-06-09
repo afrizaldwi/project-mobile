@@ -14,7 +14,7 @@ import {
 
 import { apiClient } from "@/api/client";
 import { useAuth } from "@/auth/AuthContext";
-import { deleteToken } from "@/auth/tokenStorage";
+import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
 import type { User, UserRole } from "@/types";
 
 type PasswordField = "current_password" | "password" | "password_confirmation";
@@ -187,6 +187,7 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
             setPasswordForm(initialPasswordForm);
             setPasswordMessage(message);
             await deleteToken();
+            await deleteCachedUser();
             await refreshUser();
 
             Alert.alert("Password Berhasil Diubah", message, [

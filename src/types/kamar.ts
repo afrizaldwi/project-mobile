@@ -19,7 +19,7 @@ export type Kamar = {
     nomor_kamar: string;
     luas_kamar: string;
     fasilitas: string;
-    harga_bulanan: number;
+    harga_bulanan: string;
     status_kamar: KamarStatus;
     foto_kamar: string | null;
     created_at: string;

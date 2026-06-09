@@ -20,6 +20,11 @@ type KamarListApiResponse = {
     perbaikan: number;
 };
 
+export type KamarSyncPageResponse = {
+    data: KamarApiItem[];
+    meta: PaginationMeta;
+};
+
 type KamarItemApiResponse = {
     data: KamarApiItem;
 };
@@ -87,15 +92,10 @@ function parseKamarApiItem(value: unknown): KamarApiItem {
 }
 
 function normalizeKamar(item: KamarApiItem): Kamar {
-    const hargaBulanan = Number(item.harga_bulanan);
-    if (!Number.isFinite(hargaBulanan)) {
+    if (!/^\d+(?:\.\d+)?$/.test(item.harga_bulanan)) {
         throw new Error("Respons kamar tidak valid: harga_bulanan harus berupa angka desimal.");
     }
-
-    return {
-        ...item,
-        harga_bulanan: hargaBulanan,
-    };
+    return item;
 }
 
 function parseKamarArray(value: unknown): Kamar[] {
@@ -103,6 +103,13 @@ function parseKamarArray(value: unknown): Kamar[] {
         throw new Error("Respons kamar tidak valid: data harus berupa array.");
     }
     return value.map((item) => normalizeKamar(parseKamarApiItem(item)));
+}
+
+function parseKamarApiArray(value: unknown): KamarApiItem[] {
+    if (!Array.isArray(value)) {
+        throw new Error("Respons kamar tidak valid: data harus berupa array.");
+    }
+    return value.map(parseKamarApiItem);
 }
 
 function parsePaginationMeta(value: unknown): PaginationMeta {
@@ -170,6 +177,20 @@ export async function getKamarPage(
     return parseKamarListResponse(response.data);
 }
 
+export async function getKamarSyncPage(
+    params: KamarListParams,
+    signal?: AbortSignal
+): Promise<KamarSyncPageResponse> {
+    const response = await apiClient.get<KamarListApiResponse>(KAMAR_PATH, { params, signal });
+    if (!isRecord(response.data)) {
+        throw new Error("Respons daftar kamar tidak valid.");
+    }
+    return {
+        data: parseKamarApiArray(response.data.data),
+        meta: parsePaginationMeta(response.data.meta),
+    };
+}
+
 export async function getKamarById(id: number): Promise<Kamar> {
     const response = await apiClient.get<KamarItemApiResponse>(`${KAMAR_PATH}/${id}`);
     return parseKamarItemResponse(response.data);
@@ -225,12 +246,14 @@ export function getStatusBadge(status: KamarStatus) {
     }
 }
 
-export function formatHarga(harga: number): string {
+export function formatHarga(harga: string): string {
+    const numericPrice = Number(harga);
+    if (!Number.isFinite(numericPrice)) return "-";
     return new Intl.NumberFormat("id-ID", {
         style: "currency",
         currency: "IDR",
         minimumFractionDigits: 0,
-    }).format(harga);
+    }).format(numericPrice);
 }
 
 export function formatTanggal(iso: string): string {

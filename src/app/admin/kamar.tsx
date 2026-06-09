@@ -1,5 +1,5 @@
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -11,7 +11,7 @@ import {
     View,
 } from "react-native";
 
-import { deleteKamar, getKamarPage } from "@/api/kamarService";
+import { deleteKamar } from "@/api/kamarService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
     DeleteModal,
@@ -20,20 +20,10 @@ import {
     KamarListCard,
     StatusDropdown,
 } from "@/components/kamar";
-import type { Kamar, KamarStats } from "@/types/kamar";
-import type { PaginationMeta } from "@/types/pagination";
+import type { Kamar } from "@/types/kamar";
+import { useKamarLocalList } from "@/hooks/useKamarLocalList";
 
 type ViewStrategy = "grid" | "list";
-type FirstPageMode = "initial" | "refresh";
-
-const PAGE_SIZE = 20;
-const EMPTY_STATS: KamarStats = {
-    total: 0,
-    tersedia: 0,
-    terisi: 0,
-    perbaikan: 0,
-};
-
 function getErrorMessage(error: unknown, fallback = "Gagal memuat data kamar."): string {
     return (
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -43,13 +33,6 @@ function getErrorMessage(error: unknown, fallback = "Gagal memuat data kamar."):
 }
 
 export default function AdminKamarScreen() {
-    const [items, setItems] = useState<Kamar[]>([]);
-    const [meta, setMeta] = useState<PaginationMeta | null>(null);
-    const [stats, setStats] = useState<KamarStats>(EMPTY_STATS);
-    const [initialLoading, setInitialLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<FilterStatus>("semua");
@@ -60,167 +43,43 @@ export default function AdminKamarScreen() {
     });
     const [hapusLoading, setHapusLoading] = useState(false);
 
-    const requestGenerationRef = useRef(0);
-    const requestControllerRef = useRef<AbortController | null>(null);
-    const loadingMoreRef = useRef(false);
-
     useEffect(() => {
-        const timeout = setTimeout(() => {
-            setDebouncedSearch(searchInput.trim());
-        }, 350);
-
+        const timeout = setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
         return () => clearTimeout(timeout);
     }, [searchInput]);
 
-    const fetchFirstPage = useCallback(
-        async (mode: FirstPageMode = "initial") => {
-            const generation = requestGenerationRef.current + 1;
-            requestGenerationRef.current = generation;
-            requestControllerRef.current?.abort();
+    const {
+        items, stats, initialLoading, refreshing, loadingMore, syncing, connectivity,
+        lastSyncedAt, error, notice, reloadLocal, refresh, loadMore, removeDeletedAndRefresh,
+    } = useKamarLocalList(debouncedSearch, filterStatus);
 
-            const controller = new AbortController();
-            requestControllerRef.current = controller;
-            loadingMoreRef.current = false;
-            setLoadingMore(false);
-            setError(null);
-
-            if (mode === "refresh") {
-                setRefreshing(true);
-            } else {
-                setInitialLoading(true);
-                setItems([]);
-                setMeta(null);
-            }
-
-            try {
-                const response = await getKamarPage(
-                    {
-                        page: 1,
-                        per_page: PAGE_SIZE,
-                        search: debouncedSearch || undefined,
-                        status: filterStatus,
-                    },
-                    controller.signal
-                );
-
-                if (generation !== requestGenerationRef.current) return;
-
-                setItems(response.data);
-                setMeta(response.meta);
-                setStats({
-                    total: response.total,
-                    tersedia: response.tersedia,
-                    terisi: response.terisi,
-                    perbaikan: response.perbaikan,
-                });
-            } catch (requestError) {
-                if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
-                const message = getErrorMessage(requestError);
-                setError(message);
-                Alert.alert("Error", message);
-            } finally {
-                if (generation === requestGenerationRef.current) {
-                    setInitialLoading(false);
-                    setRefreshing(false);
-                }
-            }
-        },
-        [debouncedSearch, filterStatus]
-    );
-
-    useFocusEffect(
-        useCallback(() => {
-            void fetchFirstPage("initial");
-
-            return () => {
-                requestGenerationRef.current += 1;
-                requestControllerRef.current?.abort();
-                loadingMoreRef.current = false;
-            };
-        }, [fetchFirstPage])
-    );
-
-    const loadMore = useCallback(async () => {
-        if (
-            initialLoading ||
-            refreshing ||
-            loadingMoreRef.current ||
-            !meta ||
-            meta.current_page >= meta.last_page
-        ) {
-            return;
-        }
-
-        loadingMoreRef.current = true;
-        setLoadingMore(true);
-        setError(null);
-
-        const generation = requestGenerationRef.current + 1;
-        requestGenerationRef.current = generation;
-        requestControllerRef.current?.abort();
-        const controller = new AbortController();
-        requestControllerRef.current = controller;
-
-        try {
-            const response = await getKamarPage(
-                {
-                    page: meta.current_page + 1,
-                    per_page: PAGE_SIZE,
-                    search: debouncedSearch || undefined,
-                    status: filterStatus,
-                },
-                controller.signal
-            );
-
-            if (generation !== requestGenerationRef.current) return;
-
-            setItems((currentItems) => {
-                const existingIds = new Set(currentItems.map((item) => item.id_kamar));
-                const newItems = response.data.filter((item) => {
-                    if (existingIds.has(item.id_kamar)) return false;
-                    existingIds.add(item.id_kamar);
-                    return true;
-                });
-                return [...currentItems, ...newItems];
-            });
-            setMeta(response.meta);
-            setStats({
-                total: response.total,
-                tersedia: response.tersedia,
-                terisi: response.terisi,
-                perbaikan: response.perbaikan,
-            });
-        } catch (requestError) {
-            if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
-            setError(getErrorMessage(requestError));
-        } finally {
-            if (generation === requestGenerationRef.current) {
-                loadingMoreRef.current = false;
-                setLoadingMore(false);
-            }
-        }
-    }, [debouncedSearch, filterStatus, initialLoading, meta, refreshing]);
+    const cacheStatusText = syncing
+        ? "Menyinkronkan data kamar..."
+        : notice ?? (lastSyncedAt
+            ? "Terakhir disinkronkan: " + new Date(lastSyncedAt).toLocaleString("id-ID")
+            : null);
 
     const handleHapus = async () => {
         if (!hapusModal.kamar) return;
 
         try {
             setHapusLoading(true);
-            await deleteKamar(hapusModal.kamar.id_kamar);
+            const deletedId = hapusModal.kamar.id_kamar;
+            await deleteKamar(deletedId);
             setHapusModal({ visible: false, kamar: null });
-            Alert.alert("Berhasil", "Kamar berhasil dihapus.");
-            await fetchFirstPage("initial");
+            try {
+                await removeDeletedAndRefresh(deletedId);
+                Alert.alert("Berhasil", "Kamar berhasil dihapus.");
+            } catch {
+                Alert.alert(
+                    "Kamar Terhapus",
+                    "Kamar berhasil dihapus di server, tetapi cache lokal gagal diperbarui."
+                );
+            }
         } catch (deleteError) {
             setHapusModal({ visible: false, kamar: null });
             const message = getErrorMessage(deleteError, "Gagal menghapus kamar.");
-
-            if (message.includes("No query results")) {
-                Alert.alert("Data Tidak Ditemukan", "Kamar tidak ditemukan. Data akan di-refresh.", [
-                    { text: "OK", onPress: () => void fetchFirstPage("initial") },
-                ]);
-            } else {
-                Alert.alert("Gagal Menghapus", message);
-            }
+            Alert.alert("Gagal Menghapus", message);
         } finally {
             setHapusLoading(false);
         }
@@ -313,9 +172,17 @@ export default function AdminKamarScreen() {
                 </View>
             </View>
 
+            {cacheStatusText ? (
+                <View className="mb-4 rounded-xl bg-blue-50 px-3 py-2">
+                    <Text className="text-center text-[10px] font-semibold text-blue-700">
+                        {cacheStatusText}
+                    </Text>
+                </View>
+            ) : null}
+
             {error && items.length > 0 ? (
                 <Pressable
-                    onPress={() => void fetchFirstPage("initial")}
+                    onPress={() => void reloadLocal()}
                     className="mb-4 rounded-xl border border-red-100 bg-red-50 p-3 active:opacity-80"
                 >
                     <Text className="text-center text-xs font-semibold text-red-700">{error}</Text>
@@ -333,7 +200,7 @@ export default function AdminKamarScreen() {
         <View className="items-center py-16">
             <Text className="text-center text-sm font-semibold text-red-600">{error}</Text>
             <Pressable
-                onPress={() => void fetchFirstPage("initial")}
+                onPress={() => void reloadLocal()}
                 className="mt-3 rounded-xl bg-primary px-4 py-2.5 active:opacity-80"
             >
                 <Text className="text-sm font-bold text-white">Muat Ulang</Text>
@@ -342,7 +209,9 @@ export default function AdminKamarScreen() {
     ) : (
         <View className="items-center py-16">
             <Text className="text-4xl">🛏️</Text>
-            <Text className="mt-3 text-sm font-semibold text-gray-500">Belum ada data kamar</Text>
+            <Text className="mt-3 text-sm font-semibold text-gray-500">
+                {connectivity === "offline" ? "Belum ada cache kamar offline" : "Belum ada data kamar"}
+            </Text>
             <Text className="mt-1 text-center text-xs text-gray-400">
                 {debouncedSearch
                     ? `Tidak ada kamar dengan nomor "${debouncedSearch}"`
@@ -377,7 +246,7 @@ export default function AdminKamarScreen() {
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
-                            onRefresh={() => void fetchFirstPage("refresh")}
+                            onRefresh={() => void refresh()}
                         />
                     }
                     onEndReached={() => void loadMore()}

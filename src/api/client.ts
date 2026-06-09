@@ -1,6 +1,6 @@
 import { create, type InternalAxiosRequestConfig } from "axios";
 
-import { deleteToken, getToken } from "@/auth/tokenStorage";
+import { deleteCachedUser, deleteToken, getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 
 type MultipartFieldDebug = {
@@ -124,6 +124,7 @@ function shouldEndCurrentSession(error: unknown) {
 
 async function endCurrentSession(message = "Sesi Anda sudah tidak aktif. Silakan login kembali.") {
     await deleteToken();
+    await deleteCachedUser();
     await authSessionInactiveHandler?.(message);
 }
 
