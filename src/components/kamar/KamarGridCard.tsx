@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
 import { formatHarga, formatTanggal, getImageUrl } from "@/api/kamarService";
 import type { Kamar } from "@/types/kamar";
+import { useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
 import { StatusBadge } from "./StatusBadge";
 
 type KamarGridCardProps = {
@@ -24,6 +24,7 @@ export function KamarGridCard({ kamar, onEdit, onHapus }: KamarGridCardProps) {
                 shadowColor: "#000",
                 shadowOpacity: 0.06,
                 shadowRadius: 6,
+                zIndex: 1,
             }}
         >
             {fotoUri && !imageError ? (

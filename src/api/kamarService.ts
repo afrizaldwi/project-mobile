@@ -1,162 +1,178 @@
-import axios from "axios";
-
 import { apiClient } from "@/api/client";
-import { normalizeStorageUrl } from "@/utils/storageUrl";
 import type {
     Kamar,
+    KamarApiItem,
+    KamarListParams,
     KamarListResponse,
     KamarPayload,
     KamarStatus,
     KamarTersedia,
 } from "@/types/kamar";
+import type { PaginationMeta } from "@/types/pagination";
+import { normalizeStorageUrl } from "@/utils/storageUrl";
 
-const KAMAR_LIST_PATHS = ["/admin/kamar", "/admin/laporan/kamar"] as const;
-const KAMAR_TERSEDIA_PATHS = [
-    "/admin/kamar/tersedia",
-    "/admin/laporan/kamar/tersedia",
-] as const;
+type KamarListApiResponse = {
+    data: KamarApiItem[];
+    meta: PaginationMeta;
+    total: number;
+    tersedia: number;
+    terisi: number;
+    perbaikan: number;
+};
 
-function extractKamarList(payload: unknown): Kamar[] {
-    if (!payload || typeof payload !== "object") {
-        return [];
-    }
+type KamarItemApiResponse = {
+    data: KamarApiItem;
+};
 
-    const body = payload as Record<string, unknown>;
+type KamarTersediaApiResponse = {
+    data: KamarApiItem[];
+};
 
-    if (body.data && typeof body.data === "object" && !Array.isArray(body.data)) {
-        const nested = extractKamarList(body.data);
-        if (nested.length > 0) {
-            return nested;
-        }
-    }
+const KAMAR_PATH = "/admin/kamar";
+const KAMAR_TERSEDIA_PATH = "/admin/kamar/tersedia";
+const KAMAR_STATUSES: readonly KamarStatus[] = ["tersedia", "terisi", "perbaikan"];
 
-    if (Array.isArray(body.data)) {
-        return body.data as Kamar[];
-    }
-
-    if (Array.isArray(body.kamar)) {
-        return body.kamar as Kamar[];
-    }
-
-    if (Array.isArray(body.rooms)) {
-        return body.rooms as Kamar[];
-    }
-
-    if (Array.isArray(payload)) {
-        return payload as Kamar[];
-    }
-
-    return [];
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isKamarTersedia(room: Kamar): boolean {
-    const status = String(room.status_kamar ?? "")
-        .toLowerCase()
-        .trim();
+function requireNumber(record: Record<string, unknown>, key: string): number {
+    const value = record[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`Respons kamar tidak valid: ${key} harus berupa angka.`);
+    }
+    return value;
+}
 
-    if (!status) {
-        return true;
+function requireNullableNumber(record: Record<string, unknown>, key: string): number | null {
+    const value = record[key];
+    if (value === null) return null;
+    return requireNumber(record, key);
+}
+
+function requireString(record: Record<string, unknown>, key: string): string {
+    const value = record[key];
+    if (typeof value !== "string") {
+        throw new Error(`Respons kamar tidak valid: ${key} harus berupa teks.`);
+    }
+    return value;
+}
+
+function parseKamarApiItem(value: unknown): KamarApiItem {
+    if (!isRecord(value)) {
+        throw new Error("Respons kamar tidak valid: item kamar harus berupa objek.");
     }
 
-    return (
-        status === "tersedia" ||
-        status === "available" ||
-        status === "kosong" ||
-        status === "vacant"
-    );
+    const status = requireString(value, "status_kamar");
+    if (!KAMAR_STATUSES.includes(status as KamarStatus)) {
+        throw new Error("Respons kamar tidak valid: status_kamar tidak dikenal.");
+    }
+
+    const fotoKamar = value.foto_kamar;
+    if (fotoKamar !== null && typeof fotoKamar !== "string") {
+        throw new Error("Respons kamar tidak valid: foto_kamar harus berupa teks atau null.");
+    }
+
+    return {
+        id_kamar: requireNumber(value, "id_kamar"),
+        nomor_kamar: requireString(value, "nomor_kamar"),
+        fasilitas: requireString(value, "fasilitas"),
+        harga_bulanan: requireString(value, "harga_bulanan"),
+        luas_kamar: requireString(value, "luas_kamar"),
+        foto_kamar: fotoKamar,
+        status_kamar: status as KamarStatus,
+        created_at: requireString(value, "created_at"),
+        updated_at: requireString(value, "updated_at"),
+    };
+}
+
+function normalizeKamar(item: KamarApiItem): Kamar {
+    const hargaBulanan = Number(item.harga_bulanan);
+    if (!Number.isFinite(hargaBulanan)) {
+        throw new Error("Respons kamar tidak valid: harga_bulanan harus berupa angka desimal.");
+    }
+
+    return {
+        ...item,
+        harga_bulanan: hargaBulanan,
+    };
+}
+
+function parseKamarArray(value: unknown): Kamar[] {
+    if (!Array.isArray(value)) {
+        throw new Error("Respons kamar tidak valid: data harus berupa array.");
+    }
+    return value.map((item) => normalizeKamar(parseKamarApiItem(item)));
+}
+
+function parsePaginationMeta(value: unknown): PaginationMeta {
+    if (!isRecord(value)) {
+        throw new Error("Respons kamar tidak valid: meta pagination tidak tersedia.");
+    }
+
+    return {
+        current_page: requireNumber(value, "current_page"),
+        per_page: requireNumber(value, "per_page"),
+        total: requireNumber(value, "total"),
+        last_page: requireNumber(value, "last_page"),
+        from: requireNullableNumber(value, "from"),
+        to: requireNullableNumber(value, "to"),
+    };
+}
+
+function parseKamarListResponse(value: unknown): KamarListResponse {
+    if (!isRecord(value)) {
+        throw new Error("Respons daftar kamar tidak valid.");
+    }
+
+    return {
+        data: parseKamarArray(value.data),
+        meta: parsePaginationMeta(value.meta),
+        total: requireNumber(value, "total"),
+        tersedia: requireNumber(value, "tersedia"),
+        terisi: requireNumber(value, "terisi"),
+        perbaikan: requireNumber(value, "perbaikan"),
+    };
+}
+
+function parseKamarItemResponse(value: unknown): Kamar {
+    if (!isRecord(value)) {
+        throw new Error("Respons detail kamar tidak valid.");
+    }
+    return normalizeKamar(parseKamarApiItem(value.data));
 }
 
 function mapToKamarTersedia(room: Kamar): KamarTersedia {
     return {
-        id_kamar: Number(room.id_kamar),
-        nomor_kamar: String(room.nomor_kamar ?? ""),
-        harga_bulanan: Number(room.harga_bulanan) || 0,
-        fasilitas: room.fasilitas ?? "",
+        id_kamar: room.id_kamar,
+        nomor_kamar: room.nomor_kamar,
+        harga_bulanan: room.harga_bulanan,
+        fasilitas: room.fasilitas,
     };
 }
 
 export async function getKamarTersedia(): Promise<KamarTersedia[]> {
-    for (const path of KAMAR_TERSEDIA_PATHS) {
-        try {
-            const res = await apiClient.get(path);
-            const rooms = extractKamarList(res.data);
-
-            const available = rooms.filter(
-                (room) => room.id_kamar && (!room.status_kamar || isKamarTersedia(room))
-            );
-
-            if (available.length > 0) {
-                return available.map(mapToKamarTersedia);
-            }
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 404) {
-                continue;
-            }
-            throw error;
-        }
+    const response = await apiClient.get<KamarTersediaApiResponse>(KAMAR_TERSEDIA_PATH);
+    if (!isRecord(response.data)) {
+        throw new Error("Respons kamar tersedia tidak valid.");
     }
-
-    const listResponse = await getAllKamar();
-    const rooms = listResponse.data ?? [];
-
-    const available = rooms.filter(
-        (room) => room.id_kamar && isKamarTersedia(room)
-    );
-
-    return available.map(mapToKamarTersedia);
+    return parseKamarArray(response.data.data).map(mapToKamarTersedia);
 }
 
-export async function getAllKamar(): Promise<KamarListResponse> {
-    let lastError: unknown;
-
-    for (const path of KAMAR_LIST_PATHS) {
-        try {
-            const res = await apiClient.get(path);
-            const rooms = extractKamarList(res.data);
-
-            if (rooms.length > 0 || typeof res.data === "object") {
-                const body = res.data as Partial<KamarListResponse>;
-                return {
-                    data: rooms,
-                    total: body.total ?? rooms.length,
-                    tersedia:
-                        body.tersedia ??
-                        rooms.filter((r) => isKamarTersedia(r)).length,
-                    terisi:
-                        body.terisi ??
-                        rooms.filter((r) => String(r.status_kamar).toLowerCase() === "terisi")
-                            .length,
-                    perbaikan:
-                        body.perbaikan ??
-                        rooms.filter((r) => String(r.status_kamar).toLowerCase() === "perbaikan")
-                            .length,
-                };
-            }
-        } catch (error) {
-            lastError = error;
-            if (axios.isAxiosError(error) && error.response?.status === 404) {
-                continue;
-            }
-            throw error;
-        }
-    }
-
-    throw lastError ?? new Error("Endpoint daftar kamar tidak ditemukan.");
+export async function getKamarPage(
+    params: KamarListParams,
+    signal?: AbortSignal
+): Promise<KamarListResponse> {
+    const response = await apiClient.get<KamarListApiResponse>(KAMAR_PATH, {
+        params,
+        signal,
+    });
+    return parseKamarListResponse(response.data);
 }
 
 export async function getKamarById(id: number): Promise<Kamar> {
-    for (const base of KAMAR_LIST_PATHS) {
-        try {
-            const res = await apiClient.get<{ data: Kamar }>(`${base}/${id}`);
-            return res.data.data;
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 404) {
-                continue;
-            }
-            throw error;
-        }
-    }
-    throw new Error("Kamar tidak ditemukan.");
+    const response = await apiClient.get<KamarItemApiResponse>(`${KAMAR_PATH}/${id}`);
+    return parseKamarItemResponse(response.data);
 }
 
 export async function createKamar(payload: KamarPayload): Promise<Kamar> {
@@ -169,8 +185,8 @@ export async function createKamar(payload: KamarPayload): Promise<Kamar> {
     if (payload.foto_kamar) {
         formData.append("foto_kamar", payload.foto_kamar as any);
     }
-    const res = await apiClient.post<{ data: Kamar }>("/admin/kamar", formData);
-    return res.data.data;
+    const response = await apiClient.post<KamarItemApiResponse>(KAMAR_PATH, formData);
+    return parseKamarItemResponse(response.data);
 }
 
 export async function updateKamar(id: number, payload: KamarPayload): Promise<Kamar> {
@@ -184,12 +200,12 @@ export async function updateKamar(id: number, payload: KamarPayload): Promise<Ka
     if (payload.foto_kamar) {
         formData.append("foto_kamar", payload.foto_kamar as any);
     }
-    const res = await apiClient.post<{ data: Kamar }>(`/admin/kamar/${id}`, formData);
-    return res.data.data;
+    const response = await apiClient.post<KamarItemApiResponse>(`${KAMAR_PATH}/${id}`, formData);
+    return parseKamarItemResponse(response.data);
 }
 
 export async function deleteKamar(id: number): Promise<void> {
-    await apiClient.delete(`/admin/kamar/${id}`);
+    await apiClient.delete(`${KAMAR_PATH}/${id}`);
 }
 
 export function getImageUrl(path: string | null): string | null {
@@ -199,29 +215,13 @@ export function getImageUrl(path: string | null): string | null {
 export function getStatusBadge(status: KamarStatus) {
     switch (status) {
         case "tersedia":
-            return {
-                label: "Tersedia",
-                bgColor: "#16a34a",
-                textColor: "#ffffff",
-            };
+            return { label: "Tersedia", bgColor: "#16a34a", textColor: "#ffffff" };
         case "terisi":
-            return {
-                label: "Terisi",
-                bgColor: "#dc2626",
-                textColor: "#ffffff",
-            };
+            return { label: "Terisi", bgColor: "#dc2626", textColor: "#ffffff" };
         case "perbaikan":
-            return {
-                label: "Perbaikan",
-                bgColor: "#d97706",
-                textColor: "#ffffff",
-            };
+            return { label: "Perbaikan", bgColor: "#d97706", textColor: "#ffffff" };
         default:
-            return {
-                label: "Tidak Dikenal",
-                bgColor: "#6b7280",
-                textColor: "#ffffff",
-            };
+            return { label: "Tidak Dikenal", bgColor: "#6b7280", textColor: "#ffffff" };
     }
 }
 

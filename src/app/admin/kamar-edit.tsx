@@ -93,8 +93,8 @@ export default function KamarEditScreen() {
             Alert.alert("Validasi", "Semua field wajib diisi.");
             return;
         }
-        const hargaNum = harga.replace(/\D/g, "");
-        if (!hargaNum || parseInt(hargaNum) <= 0) {
+        const hargaNum = Number(harga.trim());
+        if (!Number.isFinite(hargaNum) || hargaNum <= 0) {
             Alert.alert("Validasi", "Harga harus berupa angka yang valid.");
             return;
         }
@@ -102,7 +102,7 @@ export default function KamarEditScreen() {
             nomor_kamar: nomorKamar.trim(),
             luas_kamar: luasKamar.trim(),
             fasilitas: fasilitas.trim(),
-            harga_bulanan: hargaNum,
+            harga_bulanan: String(hargaNum),
             status_kamar: status,
             ...(foto ? { foto_kamar: foto } : {}),
         };
