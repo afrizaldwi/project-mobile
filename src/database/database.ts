@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 9;
+const DATABASE_VERSION = 10;
 type TableInfoRow = { name: string; pk?: number };
 type IndexListRow = { name: string };
 
@@ -252,6 +252,48 @@ async function validatePenyewaKeluhanSchema(db: SQLiteDatabase): Promise<void> {
     }
 }
 
+async function validatePenyewaTamuSchema(db: SQLiteDatabase): Promise<void> {
+    for (const table of ["penyewa_tamu_cache", "penyewa_tamu_cache_staging"]) {
+        const columns = await db.getAllAsync<TableInfoRow>(
+            `PRAGMA table_info(${table})`,
+        );
+        const names = new Set(columns.map((column) => column.name));
+        const primaryKey = columns
+            .filter((column) => (column.pk ?? 0) > 0)
+            .sort((a, b) => (a.pk ?? 0) - (b.pk ?? 0))
+            .map((column) => column.name);
+        if (
+            [
+                "scope_key",
+                "id_tamu",
+                "nama_tamu",
+                "no_hp_tamu",
+                "keperluan",
+                "waktu_berkunjung",
+                "id_user",
+                "nama_penghuni",
+                "nomor_kamar",
+            ].some((column) => !names.has(column)) ||
+            primaryKey.join(",") !== "scope_key,id_tamu"
+        )
+            throw new Error(`Migrasi database gagal memvalidasi tabel ${table}.`);
+    }
+    const liveIndexes = new Set(
+        (
+            await db.getAllAsync<IndexListRow>(
+                "PRAGMA index_list(penyewa_tamu_cache)",
+            )
+        ).map((index) => index.name),
+    );
+    for (const index of [
+        "idx_penyewa_tamu_scope_order",
+        "idx_penyewa_tamu_scope_user",
+    ]) {
+        if (!liveIndexes.has(index))
+            throw new Error(`Migrasi database gagal memvalidasi index ${index}.`);
+    }
+}
+
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
@@ -453,6 +495,37 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 CREATE INDEX IF NOT EXISTS idx_penyewa_keluhan_scope_sewa ON penyewa_keluhan_cache(scope_key, id_sewa);
             `);
             await validatePenyewaKeluhanSchema(txn);
+        }
+        if (currentVersion < 10) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS penyewa_tamu_cache (
+                    scope_key TEXT NOT NULL,
+                    id_tamu INTEGER NOT NULL,
+                    nama_tamu TEXT NOT NULL,
+                    no_hp_tamu TEXT NOT NULL,
+                    keperluan TEXT NOT NULL,
+                    waktu_berkunjung TEXT NOT NULL,
+                    id_user INTEGER NOT NULL,
+                    nama_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL,
+                    PRIMARY KEY(scope_key, id_tamu)
+                );
+                CREATE TABLE IF NOT EXISTS penyewa_tamu_cache_staging (
+                    scope_key TEXT NOT NULL,
+                    id_tamu INTEGER NOT NULL,
+                    nama_tamu TEXT NOT NULL,
+                    no_hp_tamu TEXT NOT NULL,
+                    keperluan TEXT NOT NULL,
+                    waktu_berkunjung TEXT NOT NULL,
+                    id_user INTEGER NOT NULL,
+                    nama_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL,
+                    PRIMARY KEY(scope_key, id_tamu)
+                );
+                CREATE INDEX IF NOT EXISTS idx_penyewa_tamu_scope_order ON penyewa_tamu_cache(scope_key, waktu_berkunjung DESC, id_tamu DESC);
+                CREATE INDEX IF NOT EXISTS idx_penyewa_tamu_scope_user ON penyewa_tamu_cache(scope_key, id_user);
+            `);
+            await validatePenyewaTamuSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });
