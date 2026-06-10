@@ -1,326 +1,262 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import {
-  tagihanApi,
-  type AdminTagihanStatus,
-  type AdminTagihanSummary,
-  type PendingPembayaranItem,
-  type TagihanReminderItem,
+import type {
+  AdminTagihanStatus,
+  AdminTagihanSummary,
+  PendingPembayaranItem,
+  TagihanReminderItem,
 } from "@/api/tagihanApi";
+import {
+  ADMIN_PENDING_SCOPE,
+  ADMIN_TAGIHAN_SCOPE,
+  getLocalAdminTagihanPage,
+  getLocalPendingPage,
+  getMetadata,
+  hasSnapshot,
+} from "@/database/tagihanRepository";
+import { syncAdminPending, syncAdminTagihan } from "@/database/tagihanSync";
+import { getConnectivityStatus } from "@/network/connectivity";
 import type { PaginationMeta } from "@/types/pagination";
-
-type FirstPageMode = "initial" | "refresh";
-const PAGE_SIZE = 20;
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-    (error instanceof Error ? error.message : null) ||
-    fallback
+import { useFocusEffect } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
+import { useCallback, useEffect, useRef, useState } from "react";
+const PAGE = 20,
+  FRESH = 300000;
+const fresh = (v: string | null) =>
+  v ? Date.now() - Date.parse(v) < FRESH : false;
+const msg = (e: unknown, f: string) =>
+  (e as { response?: { data?: { message?: string } } })?.response?.data
+    ?.message || f;
+function useLocal<T>(
+  kind: "tagihan" | "pending",
+  query: { search: string; status?: AdminTagihanStatus },
+  getId: (item: T) => number,
+  read: (p: number) => Promise<{
+    data: T[];
+    meta: PaginationMeta;
+    summary?: AdminTagihanSummary;
+  }>,
+  sync: (force?: boolean) => Promise<void>,
+) {
+  const db = useSQLiteContext();
+  const [items, setItems] = useState<T[]>([]),
+    [meta, setMeta] = useState<PaginationMeta | null>(null),
+    [summary, setSummary] = useState<AdminTagihanSummary | null>(null),
+    [initialLoading, setInitial] = useState(true),
+    [refreshing, setRefreshing] = useState(false),
+    [loadingMore, setMore] = useState(false),
+    [error, setError] = useState<string | null>(null),
+    [notice, setNotice] = useState<string | null>(null);
+  const mounted = useRef(false),
+    focused = useRef(false),
+    gen = useRef(0),
+    more = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      gen.current++;
+    };
+  }, []);
+  const load = useCallback(
+    async (soft = false) => {
+      const g = ++gen.current;
+      more.current = false;
+      if (!soft) {
+        setInitial(true);
+        setItems([]);
+        setMeta(null);
+      }
+      try {
+        const r = await read(1);
+        if (!mounted.current || g !== gen.current) return;
+        setItems(r.data);
+        setMeta(r.meta);
+        if (r.summary) setSummary(r.summary);
+        setError(null);
+      } catch (e) {
+        if (mounted.current && g === gen.current)
+          setError(msg(e, "Gagal membaca cache TAGIHAN lokal."));
+      } finally {
+        if (mounted.current && g === gen.current) setInitial(false);
+      }
+    },
+    [read],
   );
+  const refresh = useCallback(
+    async (force = false, show = false, usable = true) => {
+      if (show) setRefreshing(true);
+      try {
+        if (!force) {
+          const m = await getMetadata(
+            db,
+            kind,
+            kind === "tagihan" ? ADMIN_TAGIHAN_SCOPE : ADMIN_PENDING_SCOPE,
+          );
+          if (usable && !m.isDirty && fresh(m.lastSyncedAt)) return;
+        }
+        if ((await getConnectivityStatus()) === "offline") {
+          if (usable)
+            setNotice(
+              "Offline. Menampilkan data TAGIHAN yang tersimpan di perangkat.",
+            );
+          else
+            setError(
+              "Offline dan belum ada data TAGIHAN tersimpan di perangkat.",
+            );
+          return;
+        }
+        gen.current++;
+        await sync(force);
+        await load(true);
+        setError(null);
+        setNotice(null);
+      } catch (err) {
+        if (__DEV__)
+          console.error("[SYNC DIAGNOSTIC] Admin Tagihan sync threw:", err);
+        if (usable)
+          setNotice("Sinkronisasi TAGIHAN gagal. Cache lama tetap digunakan.");
+        else
+          setError(
+            "Data TAGIHAN belum tersedia dan sinkronisasi tidak dapat diselesaikan.",
+          );
+      } finally {
+        setRefreshing(false);
+        setInitial(false);
+      }
+    },
+    [db, kind, load, sync],
+  );
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      void (async () => {
+        const s = await hasSnapshot(
+          db,
+          kind,
+          kind === "tagihan" ? ADMIN_TAGIHAN_SCOPE : ADMIN_PENDING_SCOPE,
+        );
+        if (s) await load();
+        await refresh(false, false, s);
+      })();
+      return () => {
+        focused.current = false;
+        gen.current++;
+      };
+    }, [db, kind, load, refresh]),
+  );
+  const loadMore = useCallback(async () => {
+    if (
+      initialLoading ||
+      refreshing ||
+      more.current ||
+      !meta ||
+      meta.current_page >= meta.last_page
+    )
+      return;
+    more.current = true;
+    setMore(true);
+    const g = gen.current;
+    try {
+      const r = await read(meta.current_page + 1);
+      if (g !== gen.current) return;
+      setItems((c) => {
+        const ids = new Set(c.map(getId));
+        return [
+          ...c,
+          ...r.data.filter((x) => {
+            const id = getId(x);
+            if (ids.has(id)) return false;
+            ids.add(id);
+            return true;
+          }),
+        ];
+      });
+      setMeta(r.meta);
+      setError(null);
+    } catch {
+      setError("Gagal memuat halaman berikutnya.");
+    } finally {
+      more.current = false;
+      setMore(false);
+    }
+  }, [getId, initialLoading, meta, read, refreshing]);
+  return {
+    items,
+    meta,
+    summary,
+    initialLoading,
+    refreshing,
+    loadingMore,
+    error,
+    notice,
+    refresh: () => void refresh(true, true, Boolean(meta)),
+    reload: () => refresh(true, false, Boolean(meta)),
+    loadMore,
+    retry: () => void refresh(true, false, Boolean(meta)),
+  };
 }
-
 export function useAdminTagihanList() {
-  const [items, setItems] = useState<TagihanReminderItem[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta | null>(null);
-  const [summary, setSummary] = useState<AdminTagihanSummary | null>(null);
-  const [status, setStatusState] = useState<AdminTagihanStatus>("semua");
-  const [search, setSearchState] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState({ value: "", revision: 0 });
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const generationRef = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
-  const loadingMoreRef = useRef(false);
-  const requestedPageRef = useRef<number | null>(null);
-  const failedModeRef = useRef<FirstPageMode | "loadMore" | null>(null);
-  const initialSearchRef = useRef(true);
-
+  const db = useSQLiteContext();
+  const [status, setStatus] = useState<AdminTagihanStatus>("semua"),
+    [search, setSearchRaw] = useState(""),
+    [q, setQ] = useState("");
   useEffect(() => {
-    if (initialSearchRef.current) {
-      initialSearchRef.current = false;
-      return;
-    }
-    const timeout = setTimeout(() => {
-      setDebouncedSearch((current) => ({ value: search.trim(), revision: current.revision + 1 }));
-    }, 350);
-    return () => clearTimeout(timeout);
+    const t = setTimeout(() => setQ(search.trim()), 350);
+    return () => clearTimeout(t);
   }, [search]);
-
-  const fetchFirstPage = useCallback(async (mode: FirstPageMode = "initial") => {
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    loadingMoreRef.current = false;
-    requestedPageRef.current = null;
-    failedModeRef.current = null;
-    setLoadingMore(false);
-    setError(null);
-
-    if (mode === "refresh") setRefreshing(true);
-    else {
-      setInitialLoading(true);
-      setItems([]);
-      setMeta(null);
-      setSummary(null);
-    }
-
-    try {
-      const response = await tagihanApi.getAdminTagihan({
-        page: 1,
-        per_page: PAGE_SIZE,
-        search: debouncedSearch.value || undefined,
+  const read = useCallback(
+    (page: number) =>
+      getLocalAdminTagihanPage(db, {
+        page,
+        per_page: PAGE,
+        search: q || undefined,
         status,
-      }, controller.signal);
-      if (generation !== generationRef.current) return;
-      setItems(response.data);
-      setMeta(response.meta);
-      setSummary(response.summary);
-    } catch (requestError) {
-      if (controller.signal.aborted || generation !== generationRef.current) return;
-      setError(getErrorMessage(requestError, "Gagal memuat data tagihan."));
-      failedModeRef.current = mode;
-    } finally {
-      if (generation === generationRef.current) {
-        setInitialLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, [debouncedSearch, status]);
-
-  useFocusEffect(useCallback(() => {
-    void fetchFirstPage("initial");
-    return () => {
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-      loadingMoreRef.current = false;
-      requestedPageRef.current = null;
-    };
-  }, [fetchFirstPage]));
-
-  const loadMore = useCallback(async () => {
-    if (initialLoading || refreshing || loadingMoreRef.current || items.length === 0 || !meta || meta.current_page >= meta.last_page) return;
-    const nextPage = meta.current_page + 1;
-    if (requestedPageRef.current === nextPage) return;
-    loadingMoreRef.current = true;
-    requestedPageRef.current = nextPage;
-    failedModeRef.current = null;
-    setLoadingMore(true);
-    setError(null);
-
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    try {
-      const response = await tagihanApi.getAdminTagihan({
-        page: nextPage,
-        per_page: PAGE_SIZE,
-        search: debouncedSearch.value || undefined,
-        status,
-      }, controller.signal);
-      if (generation !== generationRef.current) return;
-      setItems((current) => {
-        const ids = new Set(current.map((item) => item.id_tagihan));
-        const newItems = response.data.filter((item) => {
-          if (ids.has(item.id_tagihan)) return false;
-          ids.add(item.id_tagihan);
-          return true;
-        });
-        return [...current, ...newItems];
-      });
-      setMeta(response.meta);
-    } catch (requestError) {
-      if (controller.signal.aborted || generation !== generationRef.current) return;
-      requestedPageRef.current = null;
-      setError(getErrorMessage(requestError, "Gagal memuat tagihan berikutnya."));
-      failedModeRef.current = "loadMore";
-    } finally {
-      if (generation === generationRef.current) {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
-      }
-    }
-  }, [debouncedSearch, initialLoading, items.length, meta, refreshing, status]);
-
-  const resetQuery = useCallback(() => {
-    generationRef.current += 1;
-    controllerRef.current?.abort();
-    loadingMoreRef.current = false;
-    requestedPageRef.current = null;
-    setLoadingMore(false);
-    setRefreshing(false);
-    setInitialLoading(true);
-    setItems([]);
-    setMeta(null);
-    setSummary(null);
-    setError(null);
-  }, []);
-
-  const setSearch = useCallback((value: string) => {
-    const next = value.slice(0, 100);
-    if (next === search) return;
-    resetQuery();
-    setSearchState(next);
-  }, [resetQuery, search]);
-
-  const setStatus = useCallback((value: AdminTagihanStatus) => {
-    if (value === status) return;
-    resetQuery();
-    setStatusState(value);
-  }, [resetQuery, status]);
-
-  const retry = useCallback(() => {
-    if (failedModeRef.current === "loadMore") void loadMore();
-    else void fetchFirstPage(failedModeRef.current === "refresh" ? "refresh" : "initial");
-  }, [fetchFirstPage, loadMore]);
-
-  return { items, meta, summary, status, setStatus, search, setSearch, initialLoading, refreshing, loadingMore, error, refresh: () => void fetchFirstPage("refresh"), reload: () => fetchFirstPage("initial"), loadMore, retry };
+      }),
+    [db, q, status],
+  );
+  const sync = useCallback(
+    (force = false) => syncAdminTagihan(db, force),
+    [db],
+  );
+  return {
+    ...useLocal<TagihanReminderItem>(
+      "tagihan",
+      { search: q, status },
+      (item) => item.id_tagihan,
+      read,
+      sync,
+    ),
+    status,
+    setStatus,
+    search,
+    setSearch: (v: string) => setSearchRaw(v.slice(0, 100)),
+  };
 }
-
 export function useAdminPendingPayments() {
-  const [items, setItems] = useState<PendingPembayaranItem[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta | null>(null);
-  const [search, setSearchState] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState({ value: "", revision: 0 });
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const generationRef = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
-  const loadingMoreRef = useRef(false);
-  const requestedPageRef = useRef<number | null>(null);
-  const failedModeRef = useRef<FirstPageMode | "loadMore" | null>(null);
-  const initialSearchRef = useRef(true);
-
+  const db = useSQLiteContext();
+  const [search, setSearchRaw] = useState(""),
+    [q, setQ] = useState("");
   useEffect(() => {
-    if (initialSearchRef.current) {
-      initialSearchRef.current = false;
-      return;
-    }
-    const timeout = setTimeout(() => {
-      setDebouncedSearch((current) => ({ value: search.trim(), revision: current.revision + 1 }));
-    }, 350);
-    return () => clearTimeout(timeout);
+    const t = setTimeout(() => setQ(search.trim()), 350);
+    return () => clearTimeout(t);
   }, [search]);
-
-  const fetchFirstPage = useCallback(async (mode: FirstPageMode = "initial") => {
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    loadingMoreRef.current = false;
-    requestedPageRef.current = null;
-    failedModeRef.current = null;
-    setLoadingMore(false);
-    setError(null);
-    if (mode === "refresh") setRefreshing(true);
-    else {
-      setInitialLoading(true);
-      setItems([]);
-      setMeta(null);
-    }
-    try {
-      const response = await tagihanApi.getPendingPayments({ page: 1, per_page: PAGE_SIZE, search: debouncedSearch.value || undefined }, controller.signal);
-      if (generation !== generationRef.current) return;
-      setItems(response.data);
-      setMeta(response.meta);
-    } catch (requestError) {
-      if (controller.signal.aborted || generation !== generationRef.current) return;
-      setError(getErrorMessage(requestError, "Gagal memuat pembayaran pending."));
-      failedModeRef.current = mode;
-    } finally {
-      if (generation === generationRef.current) {
-        setInitialLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, [debouncedSearch]);
-
-  useFocusEffect(useCallback(() => {
-    void fetchFirstPage("initial");
-    return () => {
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-      loadingMoreRef.current = false;
-      requestedPageRef.current = null;
-    };
-  }, [fetchFirstPage]));
-
-  const loadMore = useCallback(async () => {
-    if (initialLoading || refreshing || loadingMoreRef.current || items.length === 0 || !meta || meta.current_page >= meta.last_page) return;
-    const nextPage = meta.current_page + 1;
-    if (requestedPageRef.current === nextPage) return;
-    loadingMoreRef.current = true;
-    requestedPageRef.current = nextPage;
-    failedModeRef.current = null;
-    setLoadingMore(true);
-    setError(null);
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    try {
-      const response = await tagihanApi.getPendingPayments({ page: nextPage, per_page: PAGE_SIZE, search: debouncedSearch.value || undefined }, controller.signal);
-      if (generation !== generationRef.current) return;
-      setItems((current) => {
-        const ids = new Set(current.map((item) => item.id_pembayaran));
-        const newItems = response.data.filter((item) => {
-          if (ids.has(item.id_pembayaran)) return false;
-          ids.add(item.id_pembayaran);
-          return true;
-        });
-        return [...current, ...newItems];
-      });
-      setMeta(response.meta);
-    } catch (requestError) {
-      if (controller.signal.aborted || generation !== generationRef.current) return;
-      requestedPageRef.current = null;
-      setError(getErrorMessage(requestError, "Gagal memuat pembayaran pending berikutnya."));
-      failedModeRef.current = "loadMore";
-    } finally {
-      if (generation === generationRef.current) {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
-      }
-    }
-  }, [debouncedSearch, initialLoading, items.length, meta, refreshing]);
-
-  const resetSearch = useCallback(() => {
-    generationRef.current += 1;
-    controllerRef.current?.abort();
-    loadingMoreRef.current = false;
-    requestedPageRef.current = null;
-    setLoadingMore(false);
-    setRefreshing(false);
-    setInitialLoading(true);
-    setItems([]);
-    setMeta(null);
-    setError(null);
-  }, []);
-
-  const setSearch = useCallback((value: string) => {
-    const next = value.slice(0, 100);
-    if (next === search) return;
-    resetSearch();
-    setSearchState(next);
-  }, [resetSearch, search]);
-
-  const retry = useCallback(() => {
-    if (failedModeRef.current === "loadMore") void loadMore();
-    else void fetchFirstPage(failedModeRef.current === "refresh" ? "refresh" : "initial");
-  }, [fetchFirstPage, loadMore]);
-
-  return { items, meta, search, setSearch, initialLoading, refreshing, loadingMore, error, refresh: () => void fetchFirstPage("refresh"), reload: () => fetchFirstPage("initial"), loadMore, retry };
+  const read = useCallback(
+    (page: number) =>
+      getLocalPendingPage(db, { page, per_page: PAGE, search: q || undefined }),
+    [db, q],
+  );
+  const sync = useCallback(
+    (force = false) => syncAdminPending(db, force),
+    [db],
+  );
+  return {
+    ...useLocal<PendingPembayaranItem>(
+      "pending",
+      { search: q },
+      (item) => item.id_pembayaran,
+      read,
+      sync,
+    ),
+    search,
+    setSearch: (v: string) => setSearchRaw(v.slice(0, 100)),
+  };
 }
