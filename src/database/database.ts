@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 7;
+const DATABASE_VERSION = 8;
 type TableInfoRow = { name: string; pk?: number };
 type IndexListRow = { name: string };
 
@@ -179,6 +179,29 @@ async function validateDashboardSchema(db: SQLiteDatabase): Promise<void> {
     }
 }
 
+async function validateLaporanKeuanganSchema(db: SQLiteDatabase): Promise<void> {
+    for (const table of [
+        "laporan_keuangan_cache",
+        "laporan_keuangan_cache_staging",
+    ]) {
+        const columns = await db.getAllAsync<TableInfoRow>(
+            `PRAGMA table_info(${table})`,
+        );
+        const names = new Set(columns.map((column) => column.name));
+        const primaryKey = columns
+            .filter((column) => (column.pk ?? 0) > 0)
+            .sort((a, b) => (a.pk ?? 0) - (b.pk ?? 0))
+            .map((column) => column.name);
+        if (
+            ["scope_key", "tahun", "bulan", "payload_json"].some(
+                (column) => !names.has(column),
+            ) ||
+            primaryKey.join(",") !== "scope_key,tahun,bulan"
+        )
+            throw new Error(`Migrasi database gagal memvalidasi tabel ${table}.`);
+    }
+}
+
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
@@ -321,6 +344,25 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 );
             `);
             await validateDashboardSchema(txn);
+        }
+        if (currentVersion < 8) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS laporan_keuangan_cache (
+                    scope_key TEXT NOT NULL,
+                    tahun INTEGER NOT NULL,
+                    bulan INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (scope_key, tahun, bulan)
+                );
+                CREATE TABLE IF NOT EXISTS laporan_keuangan_cache_staging (
+                    scope_key TEXT NOT NULL,
+                    tahun INTEGER NOT NULL,
+                    bulan INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (scope_key, tahun, bulan)
+                );
+            `);
+            await validateLaporanKeuanganSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });
