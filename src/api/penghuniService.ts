@@ -1,4 +1,3 @@
-import { apiClient } from "./client";
 import {
     Penghuni,
     PerpanjangPayload,
@@ -7,6 +6,7 @@ import {
     type GetAdminPenghuniOptions,
     type PerpanjangResponse,
 } from "@/types/penghuni";
+import { apiClient } from "./client";
 
 const ADMIN_PENGHUNI_PATH = "/admin/penghuni";
 

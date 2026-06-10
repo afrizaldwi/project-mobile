@@ -2,7 +2,8 @@ import type { KamarStatus } from "@/types/kamar";
 import type { PaginationMeta } from "@/types/pagination";
 
 export type StatusSewa = "aktif" | "selesai";
-export type AdminPenghuniApiStatus = StatusSewa | "all";
+export type AdminPenghuniItemStatus = StatusSewa | "dibatalkan";
+export type AdminPenghuniApiStatus = AdminPenghuniItemStatus | "all";
 
 export interface AdminPenghuniItem {
     id_sewa: number;
@@ -10,24 +11,24 @@ export interface AdminPenghuniItem {
     tanggal_keluar: string | null;
     harga_deal: string;
     durasi_sewa_bulan: number;
-    status_sewa: StatusSewa;
+    status_sewa: AdminPenghuniItemStatus;
     user: {
-        id: number;
-        nama_lengkap: string;
-        email: string;
+        id: number | null;
+        nama_lengkap: string | null;
+        email: string | null;
         no_hp: string | null;
         alamat_asal: string | null;
         foto_profil: string | null;
-    } | null;
+    };
     kamar: {
-        id_kamar: number;
-        nomor_kamar: string;
+        id_kamar: number | null;
+        nomor_kamar: string | null;
         fasilitas: string | null;
-        harga_bulanan: string;
+        harga_bulanan: string | null;
         luas_kamar: string | null;
         foto_kamar: string | null;
-        status_kamar: KamarStatus;
-    } | null;
+        status_kamar: KamarStatus | string | null;
+    };
 }
 
 export interface AdminPenghuniListParams {

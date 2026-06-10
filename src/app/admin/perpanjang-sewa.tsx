@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
@@ -11,6 +12,9 @@ import {
 
 import { PenghuniCommand } from "@/api/penghuniService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { markPenghuniCacheDirty } from "@/database/penghuniRepository";
+import { synchronizePenghuniCache } from "@/database/penghuniSync";
+import { getConnectivityStatus } from "@/network/connectivity";
 import { PerpanjanganSewaBuilder, type Penghuni as SewaExtensionDetail } from "@/types/penghuni";
 
 function formatRupiah(angka: number): string {
@@ -40,6 +44,7 @@ function getValidationMessage(error: any): string {
 
 export default function PerpanjangSewaScreen() {
     const router = useRouter();
+    const db = useSQLiteContext();
     const params = useLocalSearchParams<{
         id_sewa: string;
         nama: string;
@@ -108,6 +113,10 @@ export default function PerpanjangSewaScreen() {
     }
 
     async function handleSimpan() {
+        if (await getConnectivityStatus() === "offline") {
+            Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
+            return;
+        }
         if (!idSewa) {
             Alert.alert("Gagal", "ID sewa tidak valid.");
             return;
@@ -127,6 +136,12 @@ export default function PerpanjangSewaScreen() {
         try {
             const payload = builder.build();
             const response = await PenghuniCommand.perpanjang(idSewa, payload);
+            try {
+                await markPenghuniCacheDirty(db);
+                await synchronizePenghuniCache(db);
+            } catch (cacheError) {
+                console.error("Failed to refresh PENGHUNI cache after extension:", cacheError);
+            }
             Alert.alert(
                 "Berhasil",
                 response?.message || "Sewa berhasil diperpanjang dan tagihan baru berhasil dibuat.",

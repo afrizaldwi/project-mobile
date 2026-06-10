@@ -1,11 +1,16 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Linking } from "react-native";
 
 import { apiClient } from "@/api/client";
 import { getKamarTersedia } from "@/api/kamarService";
+import { markKamarCacheDirty } from "@/database/kamarRepository";
+import { markPenghuniCacheDirty } from "@/database/penghuniRepository";
+import { synchronizePenghuniCache } from "@/database/penghuniSync";
+import { getConnectivityStatus } from "@/network/connectivity";
 import type { KamarTersedia } from "@/types/kamar";
 import { fileAssetToUploadFile, imageAssetToUploadFile, type UploadFilePayload } from "@/utils/uploadFile";
 
@@ -93,6 +98,7 @@ function buildCredentialMessage(credentials: CreatedPenghuniCredentials): string
 
 export function useTambahPenghuni() {
     const router = useRouter();
+    const db = useSQLiteContext();
 
     const [nama, setNama] = useState("");
     const [noHp, setNoHp] = useState("");
@@ -287,6 +293,10 @@ export function useTambahPenghuni() {
     };
 
     const handleSave = async () => {
+        if (await getConnectivityStatus() === "offline") {
+            Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
+            return;
+        }
         if (
             !nama.trim() ||
             !noHp.trim() ||
@@ -336,6 +346,12 @@ export function useTambahPenghuni() {
             setIsSaving(true);
             const response = await apiClient.post<CreatePenghuniResponse>("/admin/penghuni", formData);
             const credentials = response.data.credentials;
+            try {
+                await Promise.all([markPenghuniCacheDirty(db), markKamarCacheDirty(db)]);
+                await synchronizePenghuniCache(db);
+            } catch (cacheError) {
+                console.error("Failed to refresh caches after creating PENGHUNI:", cacheError);
+            }
 
             setCreatedCredentials({
                 email: credentials?.email || "-",
