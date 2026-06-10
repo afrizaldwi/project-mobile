@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 6;
-type TableInfoRow = { name: string };
+const DATABASE_VERSION = 7;
+type TableInfoRow = { name: string; pk?: number };
 type IndexListRow = { name: string };
 
 const PENGHUNI_COLUMNS = [
@@ -163,6 +163,22 @@ async function validateKeluhanSchema(db: SQLiteDatabase): Promise<void> {
     }
 }
 
+async function validateDashboardSchema(db: SQLiteDatabase): Promise<void> {
+    for (const table of ["dashboard_cache", "dashboard_cache_staging"]) {
+        const columns = await db.getAllAsync<TableInfoRow>(
+            `PRAGMA table_info(${table})`,
+        );
+        const names = new Set(columns.map((column) => column.name));
+        const scope = columns.find((column) => column.name === "scope_key");
+        if (
+            !names.has("scope_key") ||
+            !names.has("payload_json") ||
+            scope?.pk !== 1
+        )
+            throw new Error(`Migrasi database gagal memvalidasi tabel ${table}.`);
+    }
+}
+
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
@@ -292,6 +308,19 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 CREATE INDEX IF NOT EXISTS idx_pending_scope_room ON pending_pembayaran_cache(scope_key, nomor_kamar COLLATE NOCASE);
             `);
             await validateTagihanSchema(txn);
+        }
+        if (currentVersion < 7) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS dashboard_cache (
+                    scope_key TEXT PRIMARY KEY NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS dashboard_cache_staging (
+                    scope_key TEXT PRIMARY KEY NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+            `);
+            await validateDashboardSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });

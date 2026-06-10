@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
     ActivityIndicator,
     Pressable,
@@ -9,10 +9,12 @@ import {
     View,
 } from "react-native";
 
-import { getAdminDashboardSummary } from "@/api/dashboard";
 import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { syncAdminDashboard } from "@/database/dashboardSync";
+import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
 import type { AdminDashboardSummary } from "@/types";
+import { useSQLiteContext } from "expo-sqlite";
 
 const formatNumber = (value: number) => {
     return new Intl.NumberFormat("id-ID").format(value || 0);
@@ -36,37 +38,20 @@ export default function AdminDashboardScreen() {
 
 function AdminDashboardContent() {
     const router = useRouter();
+    const db = useSQLiteContext();
     const { user, logout } = useAuth();
-
-    const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [errorMessage, setErrorMessage] = useState("");
-
-    const fetchSummary = async (refresh = false) => {
-        try {
-            if (refresh) {
-                setIsRefreshing(true);
-            } else {
-                setIsLoading(true);
-            }
-
-            setErrorMessage("");
-
-            const data = await getAdminDashboardSummary();
-            setSummary(data);
-        } catch (error) {
-            console.log("ADMIN DASHBOARD ERROR:", error);
-            setErrorMessage("Gagal memuat dashboard admin.");
-        } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchSummary();
-    }, []);
+    const sync = useCallback(
+        (force = false) => syncAdminDashboard(db, force),
+        [db],
+    );
+    const {
+        summary,
+        isLoading,
+        isRefreshing,
+        error: errorMessage,
+        notice,
+        refresh,
+    } = useDashboardSnapshot<AdminDashboardSummary>("admin", sync);
 
     const cards = useMemo(() => {
         if (!summary) return [];
@@ -105,7 +90,7 @@ function AdminDashboardContent() {
         router.replace("/login");
     };
 
-    if (isLoading) {
+    if (isLoading && !summary) {
         return (
             <View className="flex-1 items-center justify-center bg-light">
                 <ActivityIndicator size="large" color="#2563eb" />
@@ -123,7 +108,7 @@ function AdminDashboardContent() {
             refreshControl={
                 <RefreshControl
                     refreshing={isRefreshing}
-                    onRefresh={() => fetchSummary(true)}
+                    onRefresh={refresh}
                 />
             }
         >
@@ -145,6 +130,11 @@ function AdminDashboardContent() {
             {errorMessage ? (
                 <View className="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-4">
                     <Text className="text-sm font-bold text-danger">{errorMessage}</Text>
+                </View>
+            ) : null}
+            {notice ? (
+                <View className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4">
+                    <Text className="text-sm font-bold text-primary">{notice}</Text>
                 </View>
             ) : null}
 
