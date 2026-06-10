@@ -72,10 +72,6 @@ export type LoginResponse = {
     user: User;
 };
 
-export type ProfileResponse = {
-    user: User;
-};
-
 export type Keluhan = {
     id_keluhan: number;
     id_sewa: number;
@@ -169,3 +165,13 @@ export type PenyewaDashboardSummary = {
         tanggal: string;
     }[];
 };
+
+export type {
+    PasswordChangePayload,
+    PasswordChangeResponse,
+    ProfileKamar,
+    ProfileRole,
+    ProfileResponse,
+    ProfileSewa,
+    ProfileUser,
+} from "@/types/profile";

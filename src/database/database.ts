@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 10;
+const DATABASE_VERSION = 11;
 type TableInfoRow = { name: string; pk?: number };
 type IndexListRow = { name: string };
 
@@ -294,6 +294,40 @@ async function validatePenyewaTamuSchema(db: SQLiteDatabase): Promise<void> {
     }
 }
 
+async function validateProfileSchema(db: SQLiteDatabase): Promise<void> {
+    const columns = await db.getAllAsync<TableInfoRow>(
+        "PRAGMA table_info(profile_cache)",
+    );
+    const names = new Set(columns.map((column) => column.name));
+    const scope = columns.find((column) => column.name === "scope_key");
+    if (
+        [
+            "scope_key",
+            "id_user",
+            "role",
+            "nama_lengkap",
+            "email",
+            "no_hp",
+            "foto_profil",
+            "alamat_asal",
+            "created_at",
+            "updated_at",
+            "status_sewa",
+            "nomor_kamar",
+            "status_kamar",
+            "tanggal_masuk",
+            "tanggal_keluar",
+        ].some((column) => !names.has(column)) ||
+        scope?.pk !== 1
+    )
+        throw new Error("Migrasi database gagal memvalidasi tabel profile_cache.");
+    const sqlRow = await db.getFirstAsync<{ sql: string | null }>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'profile_cache'",
+    );
+    if (!sqlRow?.sql?.includes("role IN ('admin', 'penyewa')"))
+        throw new Error("Migrasi database gagal memvalidasi constraint role profile_cache.");
+}
+
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
@@ -526,6 +560,28 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 CREATE INDEX IF NOT EXISTS idx_penyewa_tamu_scope_user ON penyewa_tamu_cache(scope_key, id_user);
             `);
             await validatePenyewaTamuSchema(txn);
+        }
+        if (currentVersion < 11) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS profile_cache (
+                    scope_key TEXT NOT NULL PRIMARY KEY,
+                    id_user INTEGER NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('admin', 'penyewa')),
+                    nama_lengkap TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    no_hp TEXT,
+                    foto_profil TEXT,
+                    alamat_asal TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    status_sewa TEXT,
+                    nomor_kamar TEXT,
+                    status_kamar TEXT,
+                    tanggal_masuk TEXT,
+                    tanggal_keluar TEXT
+                );
+            `);
+            await validateProfileSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });
