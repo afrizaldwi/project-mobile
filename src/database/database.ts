@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 type TableInfoRow = { name: string };
 
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
@@ -55,6 +55,35 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
             if (!hasDirtyColumn) {
                 await txn.execAsync("ALTER TABLE sync_metadata ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0;");
             }
+        }
+
+        if (currentVersion < 3) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS tamu_cache (
+                    id_tamu INTEGER PRIMARY KEY NOT NULL,
+                    nama_tamu TEXT NOT NULL,
+                    no_hp_tamu TEXT NOT NULL,
+                    keperluan TEXT NOT NULL,
+                    waktu_berkunjung TEXT NOT NULL,
+                    visit_date_jakarta TEXT NOT NULL,
+                    id_user INTEGER NOT NULL,
+                    nama_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS tamu_cache_staging (
+                    id_tamu INTEGER PRIMARY KEY NOT NULL,
+                    nama_tamu TEXT NOT NULL,
+                    no_hp_tamu TEXT NOT NULL,
+                    keperluan TEXT NOT NULL,
+                    waktu_berkunjung TEXT NOT NULL,
+                    visit_date_jakarta TEXT NOT NULL,
+                    id_user INTEGER NOT NULL,
+                    nama_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_tamu_cache_visit_order
+                ON tamu_cache(waktu_berkunjung DESC, id_tamu DESC);
+            `);
         }
 
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
