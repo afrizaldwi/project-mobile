@@ -11,6 +11,7 @@ interface AdminKeluhanListProps {
     refreshing: boolean;
     loadingMore: boolean;
     error: string | null;
+    notice?: string | null;
     keluhans: Keluhan[];
     onRefresh: () => void;
     onLoadMore: () => void;
@@ -24,6 +25,7 @@ export function AdminKeluhanList({
     refreshing,
     loadingMore,
     error,
+    notice,
     keluhans,
     onRefresh,
     onLoadMore,
@@ -74,7 +76,11 @@ export function AdminKeluhanList({
                 )
             }
             ListHeaderComponent={
-                error && keluhans.length > 0 ? (
+                notice ? (
+                    <View className="mb-3 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+                        <Text className="text-center text-xs font-semibold text-yellow-700">{notice}</Text>
+                    </View>
+                ) : error && keluhans.length > 0 ? (
                     <Pressable
                         onPress={onRetry}
                         className="mb-3 rounded-xl border border-red-100 bg-red-50 p-3 active:opacity-80"

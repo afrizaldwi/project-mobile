@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import React, { useState } from "react";
 import {
     ActivityIndicator,
@@ -17,10 +18,13 @@ import {
 
 import { apiClient } from "@/api/client";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { markKeluhanCacheDirty } from "@/database/keluhanRepository";
+import { getConnectivityStatus } from "@/network/connectivity";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 export default function TambahKeluhanScreen() {
     const router = useRouter();
+    const db = useSQLiteContext();
     const [judul, setJudul] = useState("");
     const [deskripsi, setDeskripsi] = useState("");
     const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -97,6 +101,10 @@ export default function TambahKeluhanScreen() {
     };
 
     const handleSubmit = async () => {
+        if (await getConnectivityStatus() === "offline") {
+            Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
+            return;
+        }
         if (!judul.trim() || !deskripsi.trim()) {
             Alert.alert("Validasi Error", "Judul dan deskripsi keluhan wajib diisi.");
             return;
@@ -113,6 +121,7 @@ export default function TambahKeluhanScreen() {
             });
 
             await apiClient.post("/penyewa/keluhan", formData);
+            await markKeluhanCacheDirty(db).catch(() => undefined);
 
             Alert.alert("Sukses", "Laporan keluhan berhasil dikirim.", [
                 {

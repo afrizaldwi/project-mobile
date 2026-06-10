@@ -81,11 +81,11 @@ export type Keluhan = {
     id_sewa: number;
     judul_keluhan: string;
     deskripsi_keluhan: string;
-    foto_kerusakan?: string | null;
-    foto_kerusakan_url?: string | null;
+    foto_kerusakan: string | null;
+    foto_kerusakan_url: string | null;
     status_keluhan: "pending" | "proses" | "selesai";
     tanggal_lapor: string;
-    tanggal_selesai?: string | null;
+    tanggal_selesai: string | null;
     nama_penghuni: string;
     email_penghuni: string;
     nomor_kamar: string;

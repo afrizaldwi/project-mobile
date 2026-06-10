@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 type TableInfoRow = { name: string };
 type IndexListRow = { name: string };
 
@@ -9,6 +9,11 @@ const PENGHUNI_COLUMNS = [
     "user_id", "user_nama_lengkap", "user_email", "user_no_hp", "user_alamat_asal", "user_foto_profil",
     "kamar_id", "kamar_nomor_kamar", "kamar_fasilitas", "kamar_harga_bulanan", "kamar_luas_kamar",
     "kamar_foto_kamar", "kamar_status_kamar",
+];
+const KELUHAN_COLUMNS = [
+    "id_keluhan", "id_sewa", "judul_keluhan", "deskripsi_keluhan", "foto_kerusakan",
+    "foto_kerusakan_url", "status_keluhan", "tanggal_lapor", "tanggal_selesai",
+    "nama_penghuni", "email_penghuni", "nomor_kamar",
 ];
 
 async function validatePenghuniSchema(db: SQLiteDatabase): Promise<void> {
@@ -26,6 +31,19 @@ async function validatePenghuniSchema(db: SQLiteDatabase): Promise<void> {
         "idx_penghuni_cache_email", "idx_penghuni_cache_phone", "idx_penghuni_cache_room",
         "idx_penghuni_cache_user", "idx_penghuni_cache_kamar",
     ]) {
+        if (!names.has(index)) throw new Error(`Migrasi database gagal memvalidasi index ${index}.`);
+    }
+}
+
+async function validateKeluhanSchema(db: SQLiteDatabase): Promise<void> {
+    for (const table of ["keluhan_cache", "keluhan_cache_staging"]) {
+        const columns = await db.getAllAsync<TableInfoRow>(`PRAGMA table_info(${table})`);
+        const names = new Set(columns.map((column) => column.name));
+        if (KELUHAN_COLUMNS.some((column) => !names.has(column))) throw new Error(`Migrasi database gagal memvalidasi tabel ${table}.`);
+    }
+    const indexes = await db.getAllAsync<IndexListRow>("PRAGMA index_list(keluhan_cache)");
+    const names = new Set(indexes.map((index) => index.name));
+    for (const index of ["idx_keluhan_cache_status", "idx_keluhan_cache_order", "idx_keluhan_cache_status_order", "idx_keluhan_cache_sewa"]) {
         if (!names.has(index)) throw new Error(`Migrasi database gagal memvalidasi index ${index}.`);
     }
 }
@@ -109,6 +127,29 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 CREATE INDEX IF NOT EXISTS idx_penghuni_cache_kamar ON penghuni_cache(kamar_id);
             `);
             await validatePenghuniSchema(txn);
+        }
+        if (currentVersion < 5) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS keluhan_cache (
+                    id_keluhan INTEGER PRIMARY KEY NOT NULL, id_sewa INTEGER NOT NULL, judul_keluhan TEXT NOT NULL,
+                    deskripsi_keluhan TEXT NOT NULL, foto_kerusakan TEXT, foto_kerusakan_url TEXT,
+                    status_keluhan TEXT NOT NULL CHECK(status_keluhan IN ('pending', 'proses', 'selesai')),
+                    tanggal_lapor TEXT NOT NULL, tanggal_selesai TEXT, nama_penghuni TEXT NOT NULL,
+                    email_penghuni TEXT NOT NULL, nomor_kamar TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS keluhan_cache_staging (
+                    id_keluhan INTEGER PRIMARY KEY NOT NULL, id_sewa INTEGER NOT NULL, judul_keluhan TEXT NOT NULL,
+                    deskripsi_keluhan TEXT NOT NULL, foto_kerusakan TEXT, foto_kerusakan_url TEXT,
+                    status_keluhan TEXT NOT NULL CHECK(status_keluhan IN ('pending', 'proses', 'selesai')),
+                    tanggal_lapor TEXT NOT NULL, tanggal_selesai TEXT, nama_penghuni TEXT NOT NULL,
+                    email_penghuni TEXT NOT NULL, nomor_kamar TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_keluhan_cache_status ON keluhan_cache(status_keluhan);
+                CREATE INDEX IF NOT EXISTS idx_keluhan_cache_order ON keluhan_cache(tanggal_lapor DESC, id_keluhan DESC);
+                CREATE INDEX IF NOT EXISTS idx_keluhan_cache_status_order ON keluhan_cache(status_keluhan, tanggal_lapor DESC, id_keluhan DESC);
+                CREATE INDEX IF NOT EXISTS idx_keluhan_cache_sewa ON keluhan_cache(id_sewa);
+            `);
+            await validateKeluhanSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });

@@ -13,6 +13,7 @@ export default function AdminKeluhanScreen() {
         refreshing,
         loadingMore,
         error,
+        notice,
         filter,
         setFilter,
         keluhans,
@@ -38,6 +39,7 @@ export default function AdminKeluhanScreen() {
                     refreshing={refreshing}
                     loadingMore={loadingMore}
                     error={error}
+                    notice={notice}
                     keluhans={keluhans}
                     onRefresh={onRefresh}
                     onLoadMore={loadMore}

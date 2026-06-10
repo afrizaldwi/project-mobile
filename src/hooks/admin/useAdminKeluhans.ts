@@ -1,258 +1,72 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useSQLiteContext } from "expo-sqlite";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 import { keluhanService } from "@/api/keluhanService";
-import { Keluhan } from "@/types";
+import { getKeluhanSyncMetadata, getLocalKeluhanPage, hasKeluhanSnapshot, markKeluhanCacheDirty } from "@/database/keluhanRepository";
+import { synchronizeKeluhanCache } from "@/database/keluhanSync";
+import { getConnectivityStatus, type ConnectivityStatus } from "@/network/connectivity";
+import type { Keluhan } from "@/types";
 import type { AdminKeluhanStatus, AdminKeluhanSummary } from "@/types/keluhan";
 import type { PaginationMeta } from "@/types/pagination";
 
 export type KeluhanFilterStatus = AdminKeluhanStatus;
-
-type FirstPageMode = "initial" | "refresh";
-
 const PAGE_SIZE = 20;
-
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (error instanceof Error ? error.message : null) ||
-        fallback
-    );
-}
+const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
+function getErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || (error instanceof Error ? error.message : null) || fallback; }
+function getHttpStatus(error: unknown): number | undefined { return (error as { response?: { status?: number } }).response?.status; }
+function getSyncErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback; }
+function isFresh(value: string | null): boolean { const timestamp = value ? Date.parse(value) : Number.NaN; return Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS; }
 
 export function useAdminKeluhans() {
-    const [keluhans, setKeluhans] = useState<Keluhan[]>([]);
-    const [meta, setMeta] = useState<PaginationMeta | null>(null);
-    const [summary, setSummary] = useState<AdminKeluhanSummary | null>(null);
-    const [initialLoading, setInitialLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<KeluhanFilterStatus>("semua");
-    const [exporting, setExporting] = useState<"csv" | "json" | null>(null);
+    const db = useSQLiteContext();
+    const [keluhans, setKeluhans] = useState<Keluhan[]>([]); const [meta, setMeta] = useState<PaginationMeta | null>(null);
+    const [summary, setSummary] = useState<AdminKeluhanSummary | null>(null); const [initialLoading, setInitialLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false); const [loadingMore, setLoadingMore] = useState(false); const [syncing, setSyncing] = useState(false);
+    const [connectivity, setConnectivity] = useState<ConnectivityStatus>("unknown"); const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null);
+    const [filter, setFilter] = useState<KeluhanFilterStatus>("semua"); const [exporting, setExporting] = useState<"csv" | "json" | null>(null);
+    const mountedRef = useRef(false); const focusedRef = useRef(false); const generationRef = useRef(0); const loadingMoreRef = useRef(false); const requestedPageRef = useRef<number | null>(null); const filterRef = useRef<KeluhanFilterStatus>(filter); filterRef.current = filter;
 
-    const requestGenerationRef = useRef(0);
-    const requestControllerRef = useRef<AbortController | null>(null);
-    const loadingMoreRef = useRef(false);
-    const requestedPageRef = useRef<number | null>(null);
-    const lastFailedRequestRef = useRef<FirstPageMode | "loadMore" | null>(null);
-
-    const fetchFirstPage = useCallback(
-        async (mode: FirstPageMode = "initial") => {
-            const generation = requestGenerationRef.current + 1;
-            requestGenerationRef.current = generation;
-            requestControllerRef.current?.abort();
-
-            const controller = new AbortController();
-            requestControllerRef.current = controller;
-            loadingMoreRef.current = false;
-            requestedPageRef.current = null;
-            setLoadingMore(false);
-            setError(null);
-            lastFailedRequestRef.current = null;
-
-            if (mode === "refresh") {
-                setRefreshing(true);
-            } else {
-                setInitialLoading(true);
-                setKeluhans([]);
-                setMeta(null);
-                setSummary(null);
-            }
-
-            try {
-                const response = await keluhanService.getAdminKeluhans({
-                    page: 1,
-                    per_page: PAGE_SIZE,
-                    status: filter,
-                    signal: controller.signal,
-                });
-
-                if (generation !== requestGenerationRef.current) return;
-
-                setKeluhans(response.data);
-                setMeta(response.meta);
-                setSummary(response.summary);
-            } catch (requestError) {
-                if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
-                console.error("Failed to fetch keluhan:", requestError);
-                setError(getErrorMessage(requestError, "Gagal memuat data keluhan."));
-                lastFailedRequestRef.current = mode;
-            } finally {
-                if (generation === requestGenerationRef.current) {
-                    setInitialLoading(false);
-                    setRefreshing(false);
-                }
-            }
-        },
-        [filter]
-    );
-
-    useFocusEffect(
-        useCallback(() => {
-            void fetchFirstPage("initial");
-
-            return () => {
-                requestGenerationRef.current += 1;
-                requestControllerRef.current?.abort();
-                loadingMoreRef.current = false;
-                requestedPageRef.current = null;
-                lastFailedRequestRef.current = null;
-            };
-        }, [fetchFirstPage])
-    );
-
-    const onRefresh = useCallback(() => {
-        void fetchFirstPage("refresh");
-    }, [fetchFirstPage]);
-
+    useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; generationRef.current += 1; }; }, []);
+    const loadFirstPage = useCallback(async (soft = false) => {
+        const generation = generationRef.current + 1; generationRef.current = generation; loadingMoreRef.current = false; requestedPageRef.current = null;
+        if (mountedRef.current) { setLoadingMore(false); setError(null); if (!soft) { setInitialLoading(true); setKeluhans([]); setMeta(null); setSummary(null); } }
+        try {
+            const response = await getLocalKeluhanPage(db, { page: 1, per_page: PAGE_SIZE, status: filterRef.current });
+            if (!mountedRef.current || generation !== generationRef.current) return;
+            setKeluhans(response.data); setMeta(response.meta); setSummary(response.summary);
+        } catch (loadError) { if (mountedRef.current && generation === generationRef.current) setError(getErrorMessage(loadError, "Gagal membaca cache KELUHAN lokal.")); }
+        finally { if (mountedRef.current && generation === generationRef.current) setInitialLoading(false); }
+    }, [db]);
+    const syncAndReload = useCallback(async (force: boolean, showRefresh = false, cacheUsable = true) => {
+        if (mountedRef.current && showRefresh) setRefreshing(true);
+        try {
+            if (!force) { const metadata = await getKeluhanSyncMetadata(db); if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt)) return; }
+            const status = await getConnectivityStatus(); if (!mountedRef.current || !focusedRef.current) return; setConnectivity(status);
+            if (status === "offline") { if (!cacheUsable) setError("Offline dan belum ada data KELUHAN tersimpan di perangkat."); else setNotice(showRefresh ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan." : "Offline. Menampilkan data KELUHAN yang tersimpan di perangkat."); return; }
+            generationRef.current += 1; loadingMoreRef.current = false; requestedPageRef.current = null; setLoadingMore(false); setSyncing(true);
+            await synchronizeKeluhanCache(db, force); if (!mountedRef.current || !focusedRef.current) return; setConnectivity("online"); setNotice(null); await loadFirstPage(true);
+        } catch (syncError) {
+            if (!mountedRef.current || !focusedRef.current) return; const status = getHttpStatus(syncError); const message = getSyncErrorMessage(syncError, cacheUsable ? "Sinkronisasi KELUHAN gagal. Cache lama tetap digunakan." : "Data KELUHAN belum tersedia dan sinkronisasi tidak dapat diselesaikan.");
+            if (!cacheUsable || status === 401 || status === 403) setError(message); else setNotice(message);
+        } finally { if (mountedRef.current) { setSyncing(false); setRefreshing(false); setInitialLoading(false); } }
+    }, [db, loadFirstPage]);
+    useFocusEffect(useCallback(() => {
+        focusedRef.current = true; void (async () => { const snapshot = await hasKeluhanSnapshot(db); if (snapshot) await loadFirstPage(); await syncAndReload(false, false, snapshot); })().catch((focusError) => { if (mountedRef.current) { setError(getErrorMessage(focusError, "Gagal menyiapkan cache KELUHAN.")); setInitialLoading(false); } });
+        return () => { focusedRef.current = false; generationRef.current += 1; loadingMoreRef.current = false; requestedPageRef.current = null; };
+    }, [db, loadFirstPage, syncAndReload]));
     const loadMore = useCallback(async () => {
-        if (
-            initialLoading ||
-            refreshing ||
-            loadingMoreRef.current ||
-            keluhans.length === 0 ||
-            !meta ||
-            meta.current_page >= meta.last_page
-        ) {
-            return;
-        }
-
-        const nextPage = meta.current_page + 1;
-        if (requestedPageRef.current === nextPage) return;
-
-        loadingMoreRef.current = true;
-        requestedPageRef.current = nextPage;
-        setLoadingMore(true);
-        setError(null);
-        lastFailedRequestRef.current = null;
-
-        const generation = requestGenerationRef.current + 1;
-        requestGenerationRef.current = generation;
-        requestControllerRef.current?.abort();
-        const controller = new AbortController();
-        requestControllerRef.current = controller;
-
-        try {
-            const response = await keluhanService.getAdminKeluhans({
-                page: nextPage,
-                per_page: PAGE_SIZE,
-                status: filter,
-                signal: controller.signal,
-            });
-
-            if (generation !== requestGenerationRef.current) return;
-
-            setKeluhans((currentKeluhans) => {
-                const existingIds = new Set(currentKeluhans.map((item) => item.id_keluhan));
-                const newKeluhans = response.data.filter((item) => {
-                    if (existingIds.has(item.id_keluhan)) return false;
-                    existingIds.add(item.id_keluhan);
-                    return true;
-                });
-                return [...currentKeluhans, ...newKeluhans];
-            });
-            setMeta(response.meta);
-        } catch (requestError) {
-            if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
-            console.error("Failed to load more keluhan:", requestError);
-            requestedPageRef.current = null;
-            setError(getErrorMessage(requestError, "Gagal memuat keluhan berikutnya."));
-            lastFailedRequestRef.current = "loadMore";
-        } finally {
-            if (generation === requestGenerationRef.current) {
-                loadingMoreRef.current = false;
-                setLoadingMore(false);
-            }
-        }
-    }, [filter, initialLoading, keluhans.length, meta, refreshing]);
-
-    const changeFilter = useCallback((status: KeluhanFilterStatus) => {
-        if (filter === status) return;
-
-        requestGenerationRef.current += 1;
-        requestControllerRef.current?.abort();
-        loadingMoreRef.current = false;
-        requestedPageRef.current = null;
-        lastFailedRequestRef.current = null;
-        setLoadingMore(false);
-        setRefreshing(false);
-        setInitialLoading(true);
-        setKeluhans([]);
-        setMeta(null);
-        setSummary(null);
-        setError(null);
-        setFilter(status);
-    }, [filter]);
-
-    const retry = useCallback(() => {
-        if (lastFailedRequestRef.current === "loadMore") {
-            void loadMore();
-            return;
-        }
-
-        void fetchFirstPage(lastFailedRequestRef.current === "refresh" ? "refresh" : "initial");
-    }, [fetchFirstPage, loadMore]);
-
-    const handleDelete = async (id: number) => {
-        try {
-            await keluhanService.deleteAdminKeluhan(id);
-            Alert.alert("Sukses", "Data keluhan berhasil dihapus.");
-            await fetchFirstPage("initial");
-        } catch (mutationError) {
-            console.error("Failed to delete keluhan:", mutationError);
-            Alert.alert("Error", getErrorMessage(mutationError, "Gagal menghapus keluhan."));
-        }
-    };
-
-    const handleUpdateStatus = async (id: number, status: "pending" | "proses" | "selesai") => {
-        try {
-            await keluhanService.updateStatusKeluhan(id, { status_keluhan: status });
-            Alert.alert("Sukses", "Status keluhan berhasil diperbarui.");
-            await fetchFirstPage("initial");
-        } catch (mutationError) {
-            console.error("Failed to update status keluhan:", mutationError);
-            Alert.alert("Error", getErrorMessage(mutationError, "Gagal memperbarui status."));
-        }
-    };
-
-    const handleExport = async (format: "csv" | "json") => {
-        try {
-            setExporting(format);
-            await keluhanService.exportAdminKeluhans({ format, status: filter });
-        } catch (exportError) {
-            console.error("Failed to export:", exportError);
-            Alert.alert(
-                "Error",
-                getErrorMessage(
-                    exportError,
-                    "Gagal mengunduh laporan. Pastikan backend berjalan dan Anda sudah login."
-                )
-            );
-        } finally {
-            setExporting(null);
-        }
-    };
-
-    return {
-        keluhans,
-        meta,
-        summary,
-        loading: initialLoading,
-        initialLoading,
-        refreshing,
-        loadingMore,
-        error,
-        filter,
-        setFilter: changeFilter,
-        fetchKeluhans: fetchFirstPage,
-        onRefresh,
-        loadMore,
-        retry,
-        handleDelete,
-        handleUpdateStatus,
-        handleExport,
-        exporting,
-    };
+        if (initialLoading || refreshing || syncing || loadingMoreRef.current || keluhans.length === 0 || !meta || meta.current_page >= meta.last_page) return;
+        const nextPage = meta.current_page + 1; if (requestedPageRef.current === nextPage) return; const generation = generationRef.current; loadingMoreRef.current = true; requestedPageRef.current = nextPage; setLoadingMore(true);
+        try { const response = await getLocalKeluhanPage(db, { page: nextPage, per_page: PAGE_SIZE, status: filterRef.current }); if (!mountedRef.current || generation !== generationRef.current) return; setKeluhans((current) => { const ids = new Set(current.map((item) => item.id_keluhan)); return [...current, ...response.data.filter((item) => { if (ids.has(item.id_keluhan)) return false; ids.add(item.id_keluhan); return true; })]; }); setMeta(response.meta); setSummary(response.summary); }
+        catch (loadError) { requestedPageRef.current = null; if (mountedRef.current && generation === generationRef.current) setError(getErrorMessage(loadError, "Gagal memuat halaman cache KELUHAN berikutnya.")); }
+        finally { if (mountedRef.current && generation === generationRef.current) { loadingMoreRef.current = false; setLoadingMore(false); } }
+    }, [db, initialLoading, keluhans.length, meta, refreshing, syncing]);
+    const changeFilter = useCallback((status: KeluhanFilterStatus) => { if (filter === status) return; filterRef.current = status; setFilter(status); void loadFirstPage(); }, [filter, loadFirstPage]);
+    const refreshAfterMutation = useCallback(async () => { await markKeluhanCacheDirty(db); await synchronizeKeluhanCache(db, true); await loadFirstPage(true); }, [db, loadFirstPage]);
+    const handleDelete = async (id: number) => { const status = await getConnectivityStatus(); setConnectivity(status); if (status === "offline") { Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet."); return; } try { await keluhanService.deleteAdminKeluhan(id); try { await refreshAfterMutation(); Alert.alert("Sukses", "Data keluhan berhasil dihapus."); } catch { Alert.alert("Keluhan Terhapus", "Data terhapus di server, tetapi cache lokal belum berhasil diperbarui."); } } catch (mutationError) { Alert.alert("Error", getErrorMessage(mutationError, "Gagal menghapus keluhan.")); } };
+    const handleUpdateStatus = async (id: number, status: "pending" | "proses" | "selesai") => { const connectivityStatus = await getConnectivityStatus(); setConnectivity(connectivityStatus); if (connectivityStatus === "offline") { Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet."); return; } try { await keluhanService.updateStatusKeluhan(id, { status_keluhan: status }); try { await refreshAfterMutation(); Alert.alert("Sukses", "Status keluhan berhasil diperbarui."); } catch { Alert.alert("Status Diperbarui", "Perubahan tersimpan di server, tetapi cache lokal belum berhasil diperbarui."); } } catch (mutationError) { Alert.alert("Error", getErrorMessage(mutationError, "Gagal memperbarui status.")); } };
+    const handleExport = async (format: "csv" | "json") => { const status = await getConnectivityStatus(); setConnectivity(status); if (status === "offline") { Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet."); return; } try { setExporting(format); await keluhanService.exportAdminKeluhans({ format, status: filter }); } catch (exportError) { Alert.alert("Error", getErrorMessage(exportError, "Gagal mengunduh laporan. Pastikan backend berjalan dan Anda sudah login.")); } finally { setExporting(null); } };
+    return { keluhans, meta, summary, loading: initialLoading, initialLoading, refreshing, loadingMore, syncing, connectivity, error, notice, filter, setFilter: changeFilter, fetchKeluhans: loadFirstPage, onRefresh: () => void syncAndReload(true, true, Boolean(meta)), loadMore, retry: () => void syncAndReload(true, false, Boolean(meta)), handleDelete, handleUpdateStatus, handleExport, exporting };
 }
