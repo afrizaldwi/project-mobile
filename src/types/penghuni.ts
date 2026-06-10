@@ -1,4 +1,50 @@
-export type StatusSewa = "aktif" | "selesai" | "dibatalkan";
+import type { KamarStatus } from "@/types/kamar";
+import type { PaginationMeta } from "@/types/pagination";
+
+export type StatusSewa = "aktif" | "selesai";
+export type AdminPenghuniApiStatus = StatusSewa | "all";
+
+export interface AdminPenghuniItem {
+    id_sewa: number;
+    tanggal_masuk: string;
+    tanggal_keluar: string | null;
+    harga_deal: string;
+    durasi_sewa_bulan: number;
+    status_sewa: StatusSewa;
+    user: {
+        id: number;
+        nama_lengkap: string;
+        email: string;
+        no_hp: string | null;
+        alamat_asal: string | null;
+        foto_profil: string | null;
+    } | null;
+    kamar: {
+        id_kamar: number;
+        nomor_kamar: string;
+        fasilitas: string | null;
+        harga_bulanan: string;
+        luas_kamar: string | null;
+        foto_kamar: string | null;
+        status_kamar: KamarStatus;
+    } | null;
+}
+
+export interface AdminPenghuniListParams {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    status?: AdminPenghuniApiStatus;
+}
+
+export interface GetAdminPenghuniOptions extends AdminPenghuniListParams {
+    signal?: AbortSignal;
+}
+
+export interface AdminPenghuniListResponse {
+    data: AdminPenghuniItem[];
+    meta: PaginationMeta;
+}
 
 export type Penghuni = {
     id_sewa: number;

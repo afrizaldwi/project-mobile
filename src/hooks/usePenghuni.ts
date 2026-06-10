@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
-import { apiClient } from "@/api/client";
 
-export type StatusPenghuni = "AKTIF" | "NON AKTIF";
+import { finishAdminPenghuni, getAdminPenghuniPage } from "@/api/penghuniService";
+import type { PaginationMeta } from "@/types/pagination";
+import type { AdminPenghuniApiStatus, AdminPenghuniItem, StatusSewa } from "@/types/penghuni";
+
+export type StatusPenghuni = "AKTIF" | "SELESAI";
+export type PenghuniFilterStatus = StatusPenghuni | "SEMUA";
 
 export interface Penghuni {
-    id: string;
+    id_sewa: number;
     nama: string;
     email: string;
     kamar: string;
@@ -13,147 +18,246 @@ export interface Penghuni {
     tglMasuk: string;
     tglKeluar: string;
     status: StatusPenghuni;
-    hargaBulanan: number;
+    hargaBulanan: string;
 }
 
-interface UserResponse {
-    id: number;
-    nama_lengkap: string;
-    email: string;
-    no_hp: string;
-    foto_profil: string | null;
-    alamat_asal?: string | null;
+type FirstPageMode = "initial" | "refresh";
+
+const PAGE_SIZE = 20;
+
+const API_STATUS_BY_FILTER: Record<PenghuniFilterStatus, AdminPenghuniApiStatus> = {
+    AKTIF: "aktif",
+    SELESAI: "selesai",
+    SEMUA: "all",
+};
+
+const STATUS_LABEL: Record<StatusSewa, StatusPenghuni> = {
+    aktif: "AKTIF",
+    selesai: "SELESAI",
+};
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    return (
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (error instanceof Error ? error.message : null) ||
+        fallback
+    );
 }
 
-interface KamarResponse {
-    id_kamar: number;
-    nomor_kamar: string;
-    harga_bulanan: number;
-    fasilitas: string | null;
-}
-
-interface RiwayatSewaResponse {
-    id_sewa: number;
-    tanggal_masuk: string;
-    tanggal_keluar: string | null;
-    status_sewa: "aktif" | "selesai" | "dibatalkan";
-    user?: UserResponse;
-    kamar?: KamarResponse;
-}
-
-const mockData: Penghuni[] = [
-    {
-        id: "1",
-        nama: "Budi Santoso",
-        email: "budi@kost.com",
-        kamar: "A-01",
-        ukuranKamar: "3x3 m",
-        tglMasuk: "2026-04-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "2",
-        nama: "Siti Aminah",
-        email: "siti@kost.com",
-        kamar: "A-02",
-        ukuranKamar: "3x3 m",
-        tglMasuk: "2026-03-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "3",
-        nama: "Andi Pratama",
-        email: "andi@kost.com",
-        kamar: "B-01",
-        ukuranKamar: "4x3 m",
-        tglMasuk: "2026-02-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "4",
-        nama: "Rina Lestari",
-        email: "rina@kost.com",
-        kamar: "B-02",
-        ukuranKamar: "4x3 m",
-        tglMasuk: "2025-09-01",
-        tglKeluar: "2026-03-31",
-        status: "NON AKTIF",
-        hargaBulanan: 0,
-    },
-];
-
-const mapResponseToPenghuni = (sewa: RiwayatSewaResponse): Penghuni => {
+const mapResponseToPenghuni = (sewa: AdminPenghuniItem): Penghuni => {
     return {
-        id: sewa.id_sewa.toString(),
+        id_sewa: sewa.id_sewa,
         nama: sewa.user?.nama_lengkap || "—",
         email: sewa.user?.email || "—",
         kamar: sewa.kamar?.nomor_kamar || "—",
-        ukuranKamar: sewa.kamar?.fasilitas || "3x3 m",
+        ukuranKamar: sewa.kamar?.luas_kamar || sewa.kamar?.fasilitas || "—",
         tglMasuk: sewa.tanggal_masuk,
         tglKeluar: sewa.tanggal_keluar || "—",
-        status: sewa.status_sewa === "aktif" ? "AKTIF" : "NON AKTIF",
-        hargaBulanan: Number(sewa.kamar?.harga_bulanan || 0),
+        status: STATUS_LABEL[sewa.status_sewa],
+        hargaBulanan: sewa.kamar?.harga_bulanan || "0",
     };
 };
 
 export function usePenghuni() {
-    const [activeTab, setActiveTab] = useState<"AKTIF" | "NON AKTIF">("AKTIF");
+    const [activeTab, setActiveTabState] = useState<PenghuniFilterStatus>("AKTIF");
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState({ value: "", revision: 0 });
     const [data, setData] = useState<Penghuni[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [meta, setMeta] = useState<PaginationMeta | null>(null);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            // Maps to Laravel backend endpoint prefix /admin/penghuni
-            // status parameter accepts 'aktif' or 'selesai'
-            const statusParam = activeTab === "AKTIF" ? "aktif" : "selesai";
-            const res = await apiClient.get<{ data: RiwayatSewaResponse[] }>("/admin/penghuni", {
-                params: { status: statusParam }
-            });
+    const requestGenerationRef = useRef(0);
+    const requestControllerRef = useRef<AbortController | null>(null);
+    const loadingMoreRef = useRef(false);
+    const requestedPageRef = useRef<number | null>(null);
+    const lastFailedRequestRef = useRef<FirstPageMode | "loadMore" | null>(null);
+    const initialSearchEffectRef = useRef(true);
 
-            if (res.data && Array.isArray(res.data.data)) {
-                let mappedData = res.data.data.map(mapResponseToPenghuni);
-
-                // Client-side search filtering
-                if (searchQuery.trim()) {
-                    const q = searchQuery.toLowerCase();
-                    mappedData = mappedData.filter(item =>
-                        item.nama.toLowerCase().includes(q) ||
-                        item.kamar.toLowerCase().includes(q) ||
-                        item.email.toLowerCase().includes(q)
-                    );
-                }
-
-                setData(mappedData);
-            } else {
-                throw new Error("Format respons tidak valid");
-            }
-        } catch (err: any) {
-            console.log("Error fetching data, using fallback mock data:", err?.message || err);
-            // Fallback to local mock data
-            const filteredMock = mockData.filter((item) => {
-                const matchesTab = item.status === activeTab;
-                const matchesSearch =
-                    item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    item.kamar.toLowerCase().includes(searchQuery.toLowerCase());
-                return matchesTab && matchesSearch;
-            });
-            setData(filteredMock);
-        } finally {
-            setIsLoading(false);
+    useEffect(() => {
+        if (initialSearchEffectRef.current) {
+            initialSearchEffectRef.current = false;
+            return;
         }
-    }, [activeTab, searchQuery]);
 
-    const handleArchive = async (idSewa: string) => {
+        const timeout = setTimeout(() => {
+            setDebouncedSearch((current) => ({
+                value: searchQuery.trim(),
+                revision: current.revision + 1,
+            }));
+        }, 350);
+
+        return () => clearTimeout(timeout);
+    }, [searchQuery]);
+
+    const fetchFirstPage = useCallback(
+        async (mode: FirstPageMode = "initial") => {
+            const generation = requestGenerationRef.current + 1;
+            requestGenerationRef.current = generation;
+            requestControllerRef.current?.abort();
+
+            const controller = new AbortController();
+            requestControllerRef.current = controller;
+            loadingMoreRef.current = false;
+            requestedPageRef.current = null;
+            lastFailedRequestRef.current = null;
+            setLoadingMore(false);
+            setError(null);
+
+            if (mode === "refresh") {
+                setRefreshing(true);
+            } else {
+                setInitialLoading(true);
+                setData([]);
+                setMeta(null);
+            }
+
+            try {
+                const response = await getAdminPenghuniPage({
+                    page: 1,
+                    per_page: PAGE_SIZE,
+                    search: debouncedSearch.value || undefined,
+                    status: API_STATUS_BY_FILTER[activeTab],
+                    signal: controller.signal,
+                });
+
+                if (generation !== requestGenerationRef.current) return;
+
+                setData(response.data.map(mapResponseToPenghuni));
+                setMeta(response.meta);
+            } catch (requestError) {
+                if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
+                setError(getErrorMessage(requestError, "Gagal memuat data penghuni."));
+                lastFailedRequestRef.current = mode;
+            } finally {
+                if (generation === requestGenerationRef.current) {
+                    setInitialLoading(false);
+                    setRefreshing(false);
+                }
+            }
+        },
+        [activeTab, debouncedSearch]
+    );
+
+    useFocusEffect(
+        useCallback(() => {
+            void fetchFirstPage("initial");
+
+            return () => {
+                requestGenerationRef.current += 1;
+                requestControllerRef.current?.abort();
+                loadingMoreRef.current = false;
+                requestedPageRef.current = null;
+                lastFailedRequestRef.current = null;
+            };
+        }, [fetchFirstPage])
+    );
+
+    const loadMore = useCallback(async () => {
+        if (
+            initialLoading ||
+            refreshing ||
+            loadingMoreRef.current ||
+            data.length === 0 ||
+            !meta ||
+            meta.current_page >= meta.last_page
+        ) {
+            return;
+        }
+
+        const nextPage = meta.current_page + 1;
+        if (requestedPageRef.current === nextPage) return;
+
+        loadingMoreRef.current = true;
+        requestedPageRef.current = nextPage;
+        lastFailedRequestRef.current = null;
+        setLoadingMore(true);
+        setError(null);
+
+        const generation = requestGenerationRef.current + 1;
+        requestGenerationRef.current = generation;
+        requestControllerRef.current?.abort();
+        const controller = new AbortController();
+        requestControllerRef.current = controller;
+
+        try {
+            const response = await getAdminPenghuniPage({
+                page: nextPage,
+                per_page: PAGE_SIZE,
+                search: debouncedSearch.value || undefined,
+                status: API_STATUS_BY_FILTER[activeTab],
+                signal: controller.signal,
+            });
+
+            if (generation !== requestGenerationRef.current) return;
+
+            const mappedItems = response.data.map(mapResponseToPenghuni);
+            setData((currentItems) => {
+                const existingIds = new Set(currentItems.map((item) => item.id_sewa));
+                const newItems = mappedItems.filter((item) => {
+                    if (existingIds.has(item.id_sewa)) return false;
+                    existingIds.add(item.id_sewa);
+                    return true;
+                });
+                return [...currentItems, ...newItems];
+            });
+            setMeta(response.meta);
+        } catch (requestError) {
+            if (controller.signal.aborted || generation !== requestGenerationRef.current) return;
+            requestedPageRef.current = null;
+            setError(getErrorMessage(requestError, "Gagal memuat penghuni berikutnya."));
+            lastFailedRequestRef.current = "loadMore";
+        } finally {
+            if (generation === requestGenerationRef.current) {
+                loadingMoreRef.current = false;
+                setLoadingMore(false);
+            }
+        }
+    }, [activeTab, data.length, debouncedSearch, initialLoading, meta, refreshing]);
+
+    const resetForQueryChange = useCallback(() => {
+        requestGenerationRef.current += 1;
+        requestControllerRef.current?.abort();
+        loadingMoreRef.current = false;
+        requestedPageRef.current = null;
+        lastFailedRequestRef.current = null;
+        setLoadingMore(false);
+        setRefreshing(false);
+        setInitialLoading(true);
+        setData([]);
+        setMeta(null);
+        setError(null);
+    }, []);
+
+    const setActiveTab = useCallback((status: PenghuniFilterStatus) => {
+        if (status === activeTab) return;
+        resetForQueryChange();
+        setActiveTabState(status);
+    }, [activeTab, resetForQueryChange]);
+
+    const changeSearchQuery = useCallback((query: string) => {
+        const nextQuery = query.slice(0, 100);
+        if (nextQuery === searchQuery) return;
+        resetForQueryChange();
+        setSearchQuery(nextQuery);
+    }, [resetForQueryChange, searchQuery]);
+
+    const onRefresh = useCallback(() => {
+        void fetchFirstPage("refresh");
+    }, [fetchFirstPage]);
+
+    const retry = useCallback(() => {
+        if (lastFailedRequestRef.current === "loadMore") {
+            void loadMore();
+            return;
+        }
+
+        void fetchFirstPage(lastFailedRequestRef.current === "refresh" ? "refresh" : "initial");
+    }, [fetchFirstPage, loadMore]);
+
+    const handleArchive = (idSewa: number) => {
         Alert.alert(
             "Konfirmasi",
             "Apakah Anda yakin ingin mengarsipkan penghuni ini sebagai alumni?",
@@ -163,16 +267,12 @@ export function usePenghuni() {
                     text: "Arsipkan",
                     style: "destructive",
                     onPress: async () => {
-                        setIsLoading(true);
                         try {
-                            const res = await apiClient.patch<{ message: string }>(`/admin/penghuni/${idSewa}/selesaikan`);
-                            Alert.alert("Sukses", res.data.message || "Penghuni berhasil diarsipkan.");
-                            fetchData();
-                        } catch (err: any) {
-                            console.log("Error archiving tenant:", err?.response?.data || err);
-                            const msg = err?.response?.data?.message || "Gagal mengarsipkan penghuni.";
-                            Alert.alert("Gagal", msg);
-                            setIsLoading(false);
+                            const message = await finishAdminPenghuni(idSewa);
+                            Alert.alert("Sukses", message || "Penghuni berhasil diarsipkan.");
+                            await fetchFirstPage("initial");
+                        } catch (mutationError) {
+                            Alert.alert("Gagal", getErrorMessage(mutationError, "Gagal mengarsipkan penghuni."));
                         }
                     }
                 }
@@ -180,19 +280,22 @@ export function usePenghuni() {
         );
     };
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
     return {
         activeTab,
         setActiveTab,
         searchQuery,
-        setSearchQuery,
+        setSearchQuery: changeSearchQuery,
         filteredData: data,
-        isLoading,
+        meta,
+        isLoading: initialLoading,
+        initialLoading,
+        refreshing,
+        loadingMore,
         error,
-        refetch: fetchData,
+        refetch: fetchFirstPage,
+        onRefresh,
+        loadMore,
+        retry,
         handleArchive,
     };
 }
