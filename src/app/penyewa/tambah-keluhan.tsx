@@ -16,15 +16,17 @@ import {
     View,
 } from "react-native";
 
-import { apiClient } from "@/api/client";
+import { keluhanService } from "@/api/keluhanService";
+import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { markKeluhanCacheDirty } from "@/database/keluhanRepository";
+import { markPenyewaKeluhanDirty } from "@/database/penyewaKeluhanRepository";
 import { getConnectivityStatus } from "@/network/connectivity";
-import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 export default function TambahKeluhanScreen() {
     const router = useRouter();
     const db = useSQLiteContext();
+    const { user } = useAuth();
     const [judul, setJudul] = useState("");
     const [deskripsi, setDeskripsi] = useState("");
     const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -112,16 +114,17 @@ export default function TambahKeluhanScreen() {
 
         setIsSubmitting(true);
         try {
-            const formData = new FormData();
-            formData.append("judul_keluhan", judul);
-            formData.append("deskripsi_keluhan", deskripsi);
-
-            images.forEach((image) => {
-                formData.append("foto_kerusakan[]", imageAssetToUploadFile(image, "foto_kerusakan") as any);
+            await keluhanService.createPenyewaKeluhan({
+                judul_keluhan: judul,
+                deskripsi_keluhan: deskripsi,
+                images,
             });
-
-            await apiClient.post("/penyewa/keluhan", formData);
             await markKeluhanCacheDirty(db).catch(() => undefined);
+            if (user) {
+                await markPenyewaKeluhanDirty(db, `penyewa:${user.id}`).catch(
+                    () => undefined,
+                );
+            }
 
             Alert.alert("Sukses", "Laporan keluhan berhasil dikirim.", [
                 {

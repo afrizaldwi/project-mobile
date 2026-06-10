@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 9;
 type TableInfoRow = { name: string; pk?: number };
 type IndexListRow = { name: string };
 
@@ -202,6 +202,56 @@ async function validateLaporanKeuanganSchema(db: SQLiteDatabase): Promise<void> 
     }
 }
 
+async function validatePenyewaKeluhanSchema(db: SQLiteDatabase): Promise<void> {
+    for (const table of [
+        "penyewa_keluhan_cache",
+        "penyewa_keluhan_cache_staging",
+    ]) {
+        const columns = await db.getAllAsync<TableInfoRow>(
+            `PRAGMA table_info(${table})`,
+        );
+        const names = new Set(columns.map((column) => column.name));
+        const primaryKey = columns
+            .filter((column) => (column.pk ?? 0) > 0)
+            .sort((a, b) => (a.pk ?? 0) - (b.pk ?? 0))
+            .map((column) => column.name);
+        if (
+            [
+                "scope_key",
+                "id_keluhan",
+                "id_sewa",
+                "judul_keluhan",
+                "deskripsi_keluhan",
+                "foto_kerusakan",
+                "foto_kerusakan_url",
+                "status_keluhan",
+                "tanggal_lapor",
+                "tanggal_selesai",
+                "nama_penghuni",
+                "email_penghuni",
+                "nomor_kamar",
+            ].some((column) => !names.has(column)) ||
+            primaryKey.join(",") !== "scope_key,id_keluhan"
+        )
+            throw new Error(`Migrasi database gagal memvalidasi tabel ${table}.`);
+    }
+    const liveIndexes = new Set(
+        (
+            await db.getAllAsync<IndexListRow>(
+                "PRAGMA index_list(penyewa_keluhan_cache)",
+            )
+        ).map((index) => index.name),
+    );
+    for (const index of [
+        "idx_penyewa_keluhan_scope_order",
+        "idx_penyewa_keluhan_scope_status",
+        "idx_penyewa_keluhan_scope_sewa",
+    ]) {
+        if (!liveIndexes.has(index))
+            throw new Error(`Migrasi database gagal memvalidasi index ${index}.`);
+    }
+}
+
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
@@ -363,6 +413,46 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
                 );
             `);
             await validateLaporanKeuanganSchema(txn);
+        }
+        if (currentVersion < 9) {
+            await txn.execAsync(`
+                CREATE TABLE IF NOT EXISTS penyewa_keluhan_cache (
+                    scope_key TEXT NOT NULL,
+                    id_keluhan INTEGER NOT NULL,
+                    id_sewa INTEGER NOT NULL,
+                    judul_keluhan TEXT NOT NULL,
+                    deskripsi_keluhan TEXT NOT NULL,
+                    foto_kerusakan TEXT,
+                    foto_kerusakan_url TEXT,
+                    status_keluhan TEXT NOT NULL CHECK(status_keluhan IN ('pending', 'proses', 'selesai')),
+                    tanggal_lapor TEXT NOT NULL,
+                    tanggal_selesai TEXT,
+                    nama_penghuni TEXT NOT NULL,
+                    email_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL,
+                    PRIMARY KEY(scope_key, id_keluhan)
+                );
+                CREATE TABLE IF NOT EXISTS penyewa_keluhan_cache_staging (
+                    scope_key TEXT NOT NULL,
+                    id_keluhan INTEGER NOT NULL,
+                    id_sewa INTEGER NOT NULL,
+                    judul_keluhan TEXT NOT NULL,
+                    deskripsi_keluhan TEXT NOT NULL,
+                    foto_kerusakan TEXT,
+                    foto_kerusakan_url TEXT,
+                    status_keluhan TEXT NOT NULL CHECK(status_keluhan IN ('pending', 'proses', 'selesai')),
+                    tanggal_lapor TEXT NOT NULL,
+                    tanggal_selesai TEXT,
+                    nama_penghuni TEXT NOT NULL,
+                    email_penghuni TEXT NOT NULL,
+                    nomor_kamar TEXT NOT NULL,
+                    PRIMARY KEY(scope_key, id_keluhan)
+                );
+                CREATE INDEX IF NOT EXISTS idx_penyewa_keluhan_scope_order ON penyewa_keluhan_cache(scope_key, tanggal_lapor DESC, id_keluhan DESC);
+                CREATE INDEX IF NOT EXISTS idx_penyewa_keluhan_scope_status ON penyewa_keluhan_cache(scope_key, status_keluhan);
+                CREATE INDEX IF NOT EXISTS idx_penyewa_keluhan_scope_sewa ON penyewa_keluhan_cache(scope_key, id_sewa);
+            `);
+            await validatePenyewaKeluhanSchema(txn);
         }
         await txn.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
     });
