@@ -1,13 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback } from "react";
-import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import React from "react";
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { type Penghuni, usePenghuni } from "@/hooks/usePenghuni";
+import { type Penghuni, type PenghuniFilterStatus, usePenghuni } from "@/hooks/usePenghuni";
 
 import { PenghuniCard } from "@/components/penghuni/PenghuniCard";
 import { PenghuniSearchFilter } from "@/components/penghuni/PenghuniSearchFilter";
+
+const FILTER_LABELS: Record<PenghuniFilterStatus, string> = {
+    AKTIF: "Penghuni Aktif",
+    SELESAI: "Sewa Selesai",
+    SEMUA: "Semua Penghuni",
+};
 
 export default function AdminPenghuniScreen() {
     const router = useRouter();
@@ -17,27 +23,27 @@ export default function AdminPenghuniScreen() {
         searchQuery,
         setSearchQuery,
         filteredData,
+        meta,
         isLoading,
+        refreshing,
+        loadingMore,
+        error,
         handleArchive,
-        refetch,
+        onRefresh,
+        loadMore,
+        retry,
     } = usePenghuni();
-
-    useFocusEffect(
-        useCallback(() => {
-            refetch();
-        }, [refetch])
-    );
 
     const handlePerpanjang = (item: Penghuni) => {
         router.push({
             pathname: "/admin/perpanjang-sewa",
             params: {
-                id_sewa: item.id,
+                id_sewa: String(item.id_sewa),
                 nama: item.nama,
                 nomor_kamar: item.kamar,
                 tanggal_masuk: item.tglMasuk,
                 tanggal_keluar: item.tglKeluar,
-                harga_bulanan: String(item.hargaBulanan || 0),
+                harga_bulanan: item.hargaBulanan,
             },
         });
     };
@@ -76,30 +82,47 @@ export default function AdminPenghuniScreen() {
                 ) : (
                     <FlatList
                         data={filteredData}
-                        keyExtractor={(item) => item.id}
+                        keyExtractor={(item) => String(item.id_sewa)}
                         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                        onEndReached={() => {
+                            if (filteredData.length > 0) void loadMore();
+                        }}
+                        onEndReachedThreshold={0.4}
                         ListEmptyComponent={() => (
                             <View className="bg-white rounded-xl p-8 items-center border border-gray-100 shadow-sm">
-                                <Ionicons name="people-outline" size={48} color="#9ca3af" />
-                                <Text className="text-gray-500 mt-2 text-center font-medium">
-                                    Tidak ada data penghuni ditemukan
+                                <Ionicons name={error ? "alert-circle-outline" : "people-outline"} size={48} color={error ? "#dc2626" : "#9ca3af"} />
+                                <Text className={`mt-2 text-center font-medium ${error ? "text-red-600" : "text-gray-500"}`}>
+                                    {error || "Tidak ada data penghuni ditemukan"}
                                 </Text>
+                                {error ? (
+                                    <TouchableOpacity onPress={retry} className="mt-4 rounded-lg bg-primary px-4 py-2.5">
+                                        <Text className="font-bold text-white">Muat Ulang</Text>
+                                    </TouchableOpacity>
+                                ) : null}
                             </View>
                         )}
                         ListHeaderComponent={() => (
-                            <View className="flex-row justify-between items-center mb-4 px-1">
-                                <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                    Daftar {activeTab === "AKTIF" ? "Penghuni Aktif" : "Alumni / Riwayat"}
-                                </Text>
-                                <Text className="text-xs font-semibold text-gray-500 bg-gray-200 px-2.5 py-1 rounded-full">
-                                    {filteredData.length} Orang
-                                </Text>
-                            </View>
+                            <>
+                                {error && filteredData.length > 0 ? (
+                                    <TouchableOpacity onPress={retry} className="mb-3 rounded-xl border border-red-100 bg-red-50 p-3">
+                                        <Text className="text-center text-xs font-semibold text-red-700">{error}</Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                                <View className="flex-row justify-between items-center mb-4 px-1">
+                                    <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                        Daftar {FILTER_LABELS[activeTab]}
+                                    </Text>
+                                    <Text className="text-xs font-semibold text-gray-500 bg-gray-200 px-2.5 py-1 rounded-full">
+                                        {meta?.total ?? 0} Orang
+                                    </Text>
+                                </View>
+                            </>
                         )}
+                        ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#2563eb" className="py-5" /> : null}
                         renderItem={({ item }) => (
                             <PenghuniCard
                                 item={item}
-                                activeTab={activeTab}
                                 onArchive={handleArchive}
                                 onPerpanjang={handlePerpanjang}
                             />

@@ -2,6 +2,10 @@ import { apiClient } from "@/api/client";
 import { getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 import type { Keluhan } from "@/types";
+import type {
+    AdminKeluhanListParams,
+    AdminKeluhanListResponse,
+} from "@/types/keluhan";
 import { downloadAndShareFile } from "@/utils/fileDownload";
 import * as ImagePicker from "expo-image-picker";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
@@ -22,6 +26,10 @@ export interface ExportKeluhanOptions {
     status?: string;
 }
 
+export interface GetAdminKeluhansOptions extends AdminKeluhanListParams {
+    signal?: AbortSignal;
+}
+
 // ============================================================
 // Factory Method: createKeluhanService
 // Terinspirasi dari pola create_app() di Flask-Factory.
@@ -31,9 +39,20 @@ export interface ExportKeluhanOptions {
 export const createKeluhanService = (client = apiClient) => {
     return {
         // --- Metode untuk Admin ---
-        getAdminKeluhans: async (): Promise<Keluhan[]> => {
-            const response = await client.get<{ data: Keluhan[] }>("/admin/keluhan");
-            return response.data.data;
+        getAdminKeluhans: async (
+            options: GetAdminKeluhansOptions = {}
+        ): Promise<AdminKeluhanListResponse> => {
+            const params: AdminKeluhanListParams = {
+                page: options.page,
+                per_page: options.per_page,
+                search: options.search?.trim() || undefined,
+                status: options.status,
+            };
+            const response = await client.get<AdminKeluhanListResponse>("/admin/keluhan", {
+                params,
+                signal: options.signal,
+            });
+            return response.data;
         },
 
         deleteAdminKeluhan: async (id: number): Promise<void> => {
