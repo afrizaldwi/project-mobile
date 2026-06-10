@@ -1,4 +1,48 @@
 import { apiClient } from "@/api/client";
+import type { PaginationMeta } from "@/types/pagination";
+
+export type AdminTagihanStatus =
+  | "semua"
+  | "belum_bayar"
+  | "lunas"
+  | "telat"
+  | "dibatalkan";
+
+export interface AdminTagihanQuery {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  status?: AdminTagihanStatus;
+}
+
+export interface AdminTagihanSummary {
+  total: number;
+  lunas: number;
+  belum: number;
+  telat: number;
+  dibatalkan: number;
+}
+
+export interface AdminTagihanListResponse {
+  data: TagihanReminderItem[];
+  meta: PaginationMeta;
+  summary: AdminTagihanSummary;
+}
+
+export interface AdminPendingPaymentsQuery {
+  page?: number;
+  per_page?: number;
+  search?: string;
+}
+
+export interface AdminPendingPaymentsResponse {
+  data: PendingPembayaranItem[];
+  meta: PaginationMeta;
+}
+
+export interface PenyewaTagihanResponse {
+  data: TagihanReminderItem[];
+}
 
 export interface TagihanReminderItem {
   id_tagihan: number;
@@ -71,13 +115,20 @@ export interface NotifikasiItem {
 }
 
 export const tagihanApi = {
-  async getAdminTagihan(): Promise<TagihanReminderItem[]> {
-    const res = await apiClient.get<{ data: TagihanReminderItem[] }>("/admin/tagihan");
-    return res.data.data;
+  async getAdminTagihan(
+    query: AdminTagihanQuery = {},
+    signal?: AbortSignal
+  ): Promise<AdminTagihanListResponse> {
+    const search = query.search?.trim().slice(0, 100);
+    const res = await apiClient.get<AdminTagihanListResponse>("/admin/tagihan", {
+      params: { page: query.page, per_page: query.per_page, search: search || undefined, status: query.status },
+      signal,
+    });
+    return res.data;
   },
 
   async getPenyewaTagihan(): Promise<TagihanReminderItem[]> {
-    const res = await apiClient.get<{ data: TagihanReminderItem[] }>("/penyewa/tagihan");
+    const res = await apiClient.get<PenyewaTagihanResponse>("/penyewa/tagihan");
     return res.data.data;
   },
 
@@ -86,11 +137,16 @@ export const tagihanApi = {
     return res.data;
   },
 
-  async getPendingPayments(): Promise<PendingPembayaranItem[]> {
-    const res = await apiClient.get<{ data: PendingPembayaranItem[] }>(
-      "/admin/pembayaran/pending"
-    );
-    return res.data.data;
+  async getPendingPayments(
+    query: AdminPendingPaymentsQuery = {},
+    signal?: AbortSignal
+  ): Promise<AdminPendingPaymentsResponse> {
+    const search = query.search?.trim().slice(0, 100);
+    const res = await apiClient.get<AdminPendingPaymentsResponse>("/admin/pembayaran/pending", {
+      params: { page: query.page, per_page: query.per_page, search: search || undefined },
+      signal,
+    });
+    return res.data;
   },
 
   async verifyPayment(idPembayaran: number, catatanAdmin?: string) {
