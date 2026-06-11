@@ -5,8 +5,8 @@
 Clone repository mobile:
 
 ```bash
-git clone <url-repository-mobile>
-cd <repository-mobile>
+git clone https://github.com/Manajemen-Kost/Basecamp-Kost-Mobile.git
+cd Basecamp-Kost-Mobile
 ```
 
 ---
@@ -41,7 +41,7 @@ Jika muncul halaman laravel maka server sudah berjalan
 
 Pastikan HP dan laptop berada di jaringan yang sama. Buka browser HP dan akses:
 
-http://IP_LAPTOP_ANDA:8000
+http://IP_LAPTOP:8000
 
 Jika website laravel muncul, koneksi berhasil.
 
@@ -156,6 +156,6 @@ Fitur Laporan Keuangan digunakan untuk mencatat dan menampilkan seluruh transaks
 
 digunakan untuk mengelola seluruh informasi kamar kos yang tersedia. Admin dapat menambah, mengubah, menghapus, serta melihat data kamar. Selain itu, admin dapat mengunggah foto fasilitas kamar dan mengatur harga sewa sesuai dengan kondisi atau tipe kamar. Fitur ini membantu pengelolaan inventaris kamar menjadi lebih terorganisir dan mudah diperbarui.
 
-## Laporan Keuangan
+## Perpanjangan Masa Sewa
 
 digunakan untuk memperbarui kontrak sewa penyewa yang akan habis masa berlakunya. Ketika penyewa melakukan perpanjangan, sistem secara otomatis menghitung tanggal berakhir sewa yang baru berdasarkan durasi yang dipilih serta menghitung total biaya yang harus dibayarkan. Dengan fitur ini, proses perpanjangan kontrak menjadi lebih cepat, akurat, dan mengurangi kesalahan perhitungan yang biasanya terjadi pada pencatatan manual.
