@@ -68,7 +68,7 @@ export function useDashboardSnapshot<T extends DashboardSummary>(
                 setError("");
                 setNotice("");
             }
-        } catch (cause) {
+        } catch {
             if (generation.current !== token) return;
             if (usable) {
                 setError("");
@@ -76,7 +76,6 @@ export function useDashboardSnapshot<T extends DashboardSummary>(
             } else {
                 setError("Dashboard belum tersedia dan sinkronisasi tidak dapat diselesaikan.");
             }
-            if (__DEV__) console.error(`[DASHBOARD UI] Refresh failed. Scope: ${scope}`, cause);
         } finally {
             if (generation.current === token) {
                 setLoading(false);

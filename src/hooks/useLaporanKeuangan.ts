@@ -136,7 +136,7 @@ export function useLaporanKeuangan() {
                     setErrorMessage("");
                     setNotice("");
                 }
-            } catch (error) {
+            } catch {
                 if (generation.current !== token) return;
                 if (usable) {
                     setErrorMessage("");
@@ -148,11 +148,6 @@ export function useLaporanKeuangan() {
                         "Laporan keuangan belum tersedia dan sinkronisasi tidak dapat diselesaikan.",
                     );
                 }
-                if (__DEV__)
-                    console.error(
-                        `[LAPORAN UI] Refresh failed. Period: ${periodKey(targetBulan, targetTahun)}`,
-                        error,
-                    );
             } finally {
                 if (generation.current === token) {
                     setIsLoading(false);

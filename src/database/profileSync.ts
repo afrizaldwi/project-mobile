@@ -1,13 +1,18 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { profileService } from "@/api/profileService";
-import { saveCachedUser } from "@/auth/tokenStorage";
+import { getCachedUser, saveCachedUser } from "@/auth/tokenStorage";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import {
   markProfileCacheDirty,
   publishProfileSnapshot,
 } from "@/database/profileRepository";
 import type { UserRole } from "@/types";
 import type { ProfileResponse, ProfileUser } from "@/types/profile";
+import {
+  getSafeErrorMessage,
+  isRecoverableApiAvailabilityError,
+} from "@/utils/apiErrors";
 
 const activeSyncs = new Map<string, Promise<void>>();
 
@@ -159,28 +164,44 @@ async function runProfileSync(
   try {
     const response = await profileService.getProfile();
     const normalized = normalizeProfileResponse(response, scope, expectedRole);
-    await publishProfileSnapshot(
-      db,
-      scope,
-      normalized,
-      new Date().toISOString(),
+    await withDatabaseSyncLock(`profile:${scope}`, () =>
+      publishProfileSnapshot(
+        db,
+        scope,
+        normalized,
+        new Date().toISOString(),
+      ),
     );
-    await saveCachedUser({
-      id: normalized.id,
-      nama_lengkap: normalized.nama_lengkap,
-      email: normalized.email,
-      role: normalized.role,
-    });
+    const currentCachedUser = await getCachedUser();
+    if (
+      currentCachedUser &&
+      currentCachedUser.id === normalized.id &&
+      currentCachedUser.role === normalized.role
+    ) {
+      await saveCachedUser({
+        id: normalized.id,
+        nama_lengkap: normalized.nama_lengkap,
+        email: normalized.email,
+        role: normalized.role,
+      });
+    }
   } catch (error) {
-    await markProfileCacheDirty(db, scope).catch(() => undefined);
+    await withDatabaseSyncLock(`profile:${scope}:failure`, async () => {
+      await markProfileCacheDirty(db, scope).catch(() => undefined);
+    },
+    ).catch(() => undefined);
     if (__DEV__) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      console.error("[PROFILE SYNC] Sync failed", {
+      const details = {
         scope,
         userId,
         role,
-        message,
-      });
+        message: getSafeErrorMessage(error),
+      };
+      if (isRecoverableApiAvailabilityError(error)) {
+        console.warn("[PROFILE SYNC] Synchronization unavailable", details);
+      } else {
+        console.error("[PROFILE SYNC] Sync failed", details);
+      }
     }
     throw error;
   }

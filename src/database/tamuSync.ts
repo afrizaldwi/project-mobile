@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { tamuService } from "@/api/tamuService";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import { clearTamuStaging, getTamuStagingCount, insertTamuStagingPage, markTamuCacheDirty, publishTamuStaging } from "@/database/tamuRepository";
 import type { PaginationMeta } from "@/types/pagination";
 import type { AdminTamuItem } from "@/types/tamu";
@@ -8,6 +9,9 @@ import type { AdminTamuItem } from "@/types/tamu";
 const SYNC_PAGE_SIZE = 50;
 let activeSync: Promise<void> | null = null;
 type ExpectedSnapshot = { total: number; lastPage: number; perPage: number };
+type TamuStagingSnapshot = Awaited<
+    ReturnType<typeof tamuService.getAdminTamus>
+>["data"][number] & { visit_date_jakarta: string };
 
 function isInteger(value: number): boolean {
     return Number.isFinite(value) && Number.isInteger(value);
@@ -67,33 +71,40 @@ function validatePage(requestedPage: number, meta: PaginationMeta, itemCount: nu
 }
 
 async function runTamuSync(db: SQLiteDatabase): Promise<void> {
-    await clearTamuStaging(db);
     let page = 1;
     let expected: ExpectedSnapshot | null = null;
     const seenIds = new Set<number>();
+    const items: TamuStagingSnapshot[] = [];
     try {
         do {
             const response = await tamuService.getAdminTamus({ page, per_page: SYNC_PAGE_SIZE });
             expected = validatePage(page, response.meta, response.data.length, expected);
-            const stagingItems = response.data.map((item) => {
+            const pageItems = response.data.map((item) => {
                 validateItem(item);
                 if (seenIds.has(item.id_tamu)) throw new Error(`Sinkronisasi TAMU berisi ID duplikat: ${item.id_tamu}.`);
                 seenIds.add(item.id_tamu);
                 return { ...item, visit_date_jakarta: normalizeVisitDateJakarta(item.waktu_berkunjung) };
             });
-            await insertTamuStagingPage(db, stagingItems);
+            items.push(...pageItems);
             page += 1;
         } while (expected && page <= expected.lastPage);
 
         if (!expected || page - 1 !== expected.lastPage || seenIds.size !== expected.total) {
             throw new Error("Jumlah TAMU hasil sinkronisasi tidak sesuai metadata.");
         }
-        const stagedCount = await getTamuStagingCount(db);
-        if (stagedCount !== expected.total) throw new Error(`Jumlah staging TAMU tidak lengkap: ${stagedCount}/${expected.total}.`);
-        await publishTamuStaging(db, expected.total, new Date().toISOString());
+        const snapshot = expected;
+        await withDatabaseSyncLock("tamu:admin", async () => {
+            await clearTamuStaging(db);
+            await insertTamuStagingPage(db, items);
+            const stagedCount = await getTamuStagingCount(db);
+            if (stagedCount !== snapshot.total) throw new Error(`Jumlah staging TAMU tidak lengkap: ${stagedCount}/${snapshot.total}.`);
+            await publishTamuStaging(db, snapshot.total, new Date().toISOString());
+        });
     } catch (error) {
-        await clearTamuStaging(db).catch(() => undefined);
-        await markTamuCacheDirty(db).catch(() => undefined);
+        await withDatabaseSyncLock("tamu:admin:failure", async () => {
+            await clearTamuStaging(db).catch(() => undefined);
+            await markTamuCacheDirty(db).catch(() => undefined);
+        }).catch(() => undefined);
         throw error;
     }
 }

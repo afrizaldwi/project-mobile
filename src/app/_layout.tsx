@@ -1,4 +1,6 @@
+import "@/utils/nativeSplash";
 import { AuthProvider } from "@/auth/AuthContext";
+import { AppStartupBootstrap } from "@/components/bootstrap/AppStartupBootstrap";
 import { DatabaseProvider } from "@/database/DatabaseProvider";
 import { setupNotificationsAndBackgroundFetch } from "@/utils/backgroundTask";
 import { Stack } from "expo-router";
@@ -15,6 +17,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <DatabaseProvider>
         <AuthProvider>
+          <AppStartupBootstrap />
           <Stack screenOptions={{ headerShown: false }} />
         </AuthProvider>
       </DatabaseProvider>

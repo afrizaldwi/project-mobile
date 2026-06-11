@@ -109,9 +109,7 @@ function useLocal<T>(
         await load(true);
         setError(null);
         setNotice(null);
-      } catch (err) {
-        if (__DEV__)
-          console.error("[SYNC DIAGNOSTIC] Admin Tagihan sync threw:", err);
+      } catch {
         if (usable)
           setNotice("Sinkronisasi TAGIHAN gagal. Cache lama tetap digunakan.");
         else

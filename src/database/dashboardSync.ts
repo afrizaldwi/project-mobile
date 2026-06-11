@@ -10,9 +10,33 @@ import {
     normalizePenyewaDashboard,
     publishDashboard,
 } from "@/database/dashboardRepository";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
+import {
+    getSafeErrorMessage,
+    isRecoverableApiAvailabilityError,
+} from "@/utils/apiErrors";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 const active = new Map<string, Promise<void>>();
+
+async function fetchAndValidateDashboard(
+    scope: string,
+    fetch: () => Promise<unknown>,
+) {
+    return scope === "admin"
+        ? normalizeAdminDashboard(await fetch())
+        : normalizePenyewaDashboard(await fetch());
+}
+
+async function persistDashboard(
+    db: SQLiteDatabase,
+    scope: string,
+    payload: ReturnType<typeof normalizeAdminDashboard> | ReturnType<typeof normalizePenyewaDashboard>,
+) {
+    await clearDashboardStaging(db, scope);
+    await insertDashboardStaging(db, scope, payload);
+    await publishDashboard(db, scope);
+}
 
 async function synchronize(
     db: SQLiteDatabase,
@@ -20,17 +44,23 @@ async function synchronize(
     fetch: () => Promise<unknown>,
 ) {
     try {
-        await clearDashboardStaging(db, scope);
-        const payload = scope === "admin"
-            ? normalizeAdminDashboard(await fetch())
-            : normalizePenyewaDashboard(await fetch());
-        await insertDashboardStaging(db, scope, payload);
-        await publishDashboard(db, scope);
+        const payload = await fetchAndValidateDashboard(scope, fetch);
+        await withDatabaseSyncLock(`dashboard:${scope}`, () =>
+            persistDashboard(db, scope, payload),
+        );
     } catch (error) {
-        await clearDashboardStaging(db, scope).catch(() => undefined);
-        await markDashboardDirty(db, scope).catch(() => undefined);
-        if (__DEV__)
-            console.error(`[DASHBOARD SYNC] Synchronization failed. Scope: ${scope}`, error);
+        await withDatabaseSyncLock(`dashboard:${scope}:failure`, async () => {
+            await clearDashboardStaging(db, scope).catch(() => undefined);
+            await markDashboardDirty(db, scope).catch(() => undefined);
+        }).catch(() => undefined);
+        if (__DEV__) {
+            const details = { scope, message: getSafeErrorMessage(error) };
+            if (isRecoverableApiAvailabilityError(error)) {
+                console.warn("[DASHBOARD SYNC] Synchronization unavailable", details);
+            } else {
+                console.error("[DASHBOARD SYNC] Synchronization failed", details);
+            }
+        }
         throw error;
     }
 }

@@ -8,29 +8,61 @@ import {
     publishLaporanKeuangan,
     validateLaporanPeriod,
 } from "@/database/laporanKeuanganRepository";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
+import {
+    getSafeErrorMessage,
+    isRecoverableApiAvailabilityError,
+} from "@/utils/apiErrors";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 const active = new Map<string, Promise<void>>();
 
+async function fetchAndValidateLaporanKeuangan(bulan: number, tahun: number) {
+    validateLaporanPeriod(bulan, tahun);
+    return normalizeLaporanKeuangan(
+        await laporanService.getLaporanKeuangan(bulan, tahun),
+        bulan,
+        tahun,
+    );
+}
+
+async function persistLaporanKeuangan(
+    db: SQLiteDatabase,
+    bulan: number,
+    tahun: number,
+    report: ReturnType<typeof normalizeLaporanKeuangan>,
+) {
+    await clearLaporanKeuanganStaging(db, bulan, tahun);
+    await insertLaporanKeuanganStaging(db, report);
+    await publishLaporanKeuangan(db, bulan, tahun);
+}
+
 async function synchronize(db: SQLiteDatabase, bulan: number, tahun: number) {
     validateLaporanPeriod(bulan, tahun);
     try {
-        await clearLaporanKeuanganStaging(db, bulan, tahun);
-        const report = normalizeLaporanKeuangan(
-            await laporanService.getLaporanKeuangan(bulan, tahun),
-            bulan,
-            tahun,
+        const report = await fetchAndValidateLaporanKeuangan(bulan, tahun);
+        await withDatabaseSyncLock(laporanResourceKey(bulan, tahun), () =>
+            persistLaporanKeuangan(db, bulan, tahun, report),
         );
-        await insertLaporanKeuanganStaging(db, report);
-        await publishLaporanKeuangan(db, bulan, tahun);
     } catch (error) {
-        await clearLaporanKeuanganStaging(db, bulan, tahun).catch(() => undefined);
-        await markLaporanKeuanganDirty(db, bulan, tahun).catch(() => undefined);
-        if (__DEV__)
-            console.error(
-                `[LAPORAN SYNC] Synchronization failed. Period: ${tahun}-${String(bulan).padStart(2, "0")}`,
-                error,
-            );
+        await withDatabaseSyncLock(
+            `${laporanResourceKey(bulan, tahun)}:failure`,
+            async () => {
+                await clearLaporanKeuanganStaging(db, bulan, tahun).catch(() => undefined);
+                await markLaporanKeuanganDirty(db, bulan, tahun).catch(() => undefined);
+            },
+        ).catch(() => undefined);
+        if (__DEV__) {
+            const details = {
+                period: `${tahun}-${String(bulan).padStart(2, "0")}`,
+                message: getSafeErrorMessage(error),
+            };
+            if (isRecoverableApiAvailabilityError(error)) {
+                console.warn("[LAPORAN SYNC] Synchronization unavailable", details);
+            } else {
+                console.error("[LAPORAN SYNC] Synchronization failed", details);
+            }
+        }
         throw error;
     }
 }

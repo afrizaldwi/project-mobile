@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { getAdminPenghuniPage } from "@/api/penghuniService";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import { clearPenghuniStaging, getPenghuniStagingCount, insertPenghuniStagingPage, markPenghuniCacheDirty, publishPenghuniStaging } from "@/database/penghuniRepository";
 import type { PaginationMeta } from "@/types/pagination";
 import type { AdminPenghuniItem } from "@/types/penghuni";
@@ -30,25 +31,30 @@ function validatePage(page: number, meta: PaginationMeta, itemCount: number, exp
 }
 async function runPenghuniSync(db: SQLiteDatabase): Promise<void> {
     let page = 1; let traversedCount = 0; let expected: ExpectedSnapshot | null = null;
-    const seenIds = new Set<number>();
+    const seenIds = new Set<number>(); const items: AdminPenghuniItem[] = [];
     try {
-        await clearPenghuniStaging(db);
         do {
             const response = await getAdminPenghuniPage({ page, per_page: SYNC_PAGE_SIZE, status: "all" });
             if (!response || !Array.isArray(response.data)) throw new Error("Respons sinkronisasi PENGHUNI tidak valid.");
             expected = validatePage(page, response.meta, response.data.length, expected);
             for (const item of response.data) { validateItem(item); if (seenIds.has(item.id_sewa)) throw new Error(`Sinkronisasi PENGHUNI berisi id_sewa duplikat: ${item.id_sewa}.`); seenIds.add(item.id_sewa); }
-            traversedCount += response.data.length;
-            await insertPenghuniStagingPage(db, response.data);
+            traversedCount += response.data.length; items.push(...response.data);
             page += 1;
         } while (expected && page <= expected.lastPage);
         if (!expected || page - 1 !== expected.lastPage || traversedCount !== expected.total || seenIds.size !== expected.total) throw new Error("Jumlah PENGHUNI hasil sinkronisasi tidak sesuai metadata.");
-        const stagedCount = await getPenghuniStagingCount(db);
-        if (stagedCount !== expected.total) throw new Error(`Jumlah staging PENGHUNI tidak lengkap: ${stagedCount}/${expected.total}.`);
-        await publishPenghuniStaging(db, expected.total, new Date().toISOString());
+        const snapshot = expected;
+        await withDatabaseSyncLock("penghuni", async () => {
+            await clearPenghuniStaging(db);
+            await insertPenghuniStagingPage(db, items);
+            const stagedCount = await getPenghuniStagingCount(db);
+            if (stagedCount !== snapshot.total) throw new Error(`Jumlah staging PENGHUNI tidak lengkap: ${stagedCount}/${snapshot.total}.`);
+            await publishPenghuniStaging(db, snapshot.total, new Date().toISOString());
+        });
     } catch (error) {
-        await clearPenghuniStaging(db).catch(() => undefined);
-        await markPenghuniCacheDirty(db).catch(() => undefined);
+        await withDatabaseSyncLock("penghuni:failure", async () => {
+            await clearPenghuniStaging(db).catch(() => undefined);
+            await markPenghuniCacheDirty(db).catch(() => undefined);
+        }).catch(() => undefined);
         throw error;
     }
 }

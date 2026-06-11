@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { tamuService } from "@/api/tamuService";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import {
     clearPenyewaTamuStaging,
     getPenyewaTamuStagingCount,
@@ -9,6 +10,10 @@ import {
     publishPenyewaTamuStaging,
 } from "@/database/penyewaTamuRepository";
 import type { Tamu } from "@/types";
+import {
+    getSafeErrorMessage,
+    isRecoverableApiAvailabilityError,
+} from "@/utils/apiErrors";
 
 const activeSyncs = new Map<string, Promise<void>>();
 
@@ -45,7 +50,6 @@ async function runPenyewaTamuSync(
     scope: string,
 ): Promise<void> {
     const expectedUserId = getScopeUserId(scope);
-    await clearPenyewaTamuStaging(db, scope);
     try {
         const response = await tamuService.getPenyewaTamus();
         if (!Array.isArray(response))
@@ -57,19 +61,28 @@ async function runPenyewaTamuSync(
                 throw new Error(`Sinkronisasi TAMU penyewa berisi ID duplikat: ${item.id_tamu}.`);
             seenIds.add(item.id_tamu);
         }
-        await insertPenyewaTamuStaging(db, scope, response);
-        const stagedCount = await getPenyewaTamuStagingCount(db, scope);
-        if (stagedCount !== response.length)
-            throw new Error(
-                `Jumlah staging TAMU penyewa tidak lengkap: ${stagedCount}/${response.length}.`,
-            );
-        await publishPenyewaTamuStaging(db, scope, response.length, new Date().toISOString());
+        await withDatabaseSyncLock(`tamu:${scope}`, async () => {
+            await clearPenyewaTamuStaging(db, scope);
+            await insertPenyewaTamuStaging(db, scope, response);
+            const stagedCount = await getPenyewaTamuStagingCount(db, scope);
+            if (stagedCount !== response.length)
+                throw new Error(
+                    `Jumlah staging TAMU penyewa tidak lengkap: ${stagedCount}/${response.length}.`,
+                );
+            await publishPenyewaTamuStaging(db, scope, response.length, new Date().toISOString());
+        });
     } catch (error) {
-        await clearPenyewaTamuStaging(db, scope).catch(() => undefined);
-        await markPenyewaTamuDirty(db, scope).catch(() => undefined);
+        await withDatabaseSyncLock(`tamu:${scope}:failure`, async () => {
+            await clearPenyewaTamuStaging(db, scope).catch(() => undefined);
+            await markPenyewaTamuDirty(db, scope).catch(() => undefined);
+        }).catch(() => undefined);
         if (__DEV__) {
-            const message = error instanceof Error ? error.message : "Unknown error";
-            console.error("[PENYEWA TAMU SYNC] Sync failed", { scope, message });
+            const details = { scope, message: getSafeErrorMessage(error) };
+            if (isRecoverableApiAvailabilityError(error)) {
+                console.warn("[PENYEWA TAMU SYNC] Synchronization unavailable", details);
+            } else {
+                console.error("[PENYEWA TAMU SYNC] Sync failed", details);
+            }
         }
         throw error;
     }

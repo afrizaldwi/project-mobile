@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { getKamarSyncPage } from "@/api/kamarService";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import {
     clearKamarStaging,
     getKamarStagingCount,
@@ -37,10 +38,10 @@ function validatePage(requestedPage: number, meta: PaginationMeta, itemCount: nu
 }
 
 async function runKamarSync(db: SQLiteDatabase): Promise<void> {
-    await clearKamarStaging(db);
     let page = 1;
     let expected: ExpectedSnapshot | null = null;
     const seenIds = new Set<number>();
+    const items: Awaited<ReturnType<typeof getKamarSyncPage>>["data"] = [];
 
     try {
         do {
@@ -52,20 +53,27 @@ async function runKamarSync(db: SQLiteDatabase): Promise<void> {
                 }
                 seenIds.add(item.id_kamar);
             }
-            await insertKamarStagingPage(db, response.data);
+            items.push(...response.data);
             page += 1;
         } while (expected && page <= expected.lastPage);
 
         if (!expected || page - 1 !== expected.lastPage) {
             throw new Error("Sinkronisasi kamar tidak mencapai halaman terakhir yang diharapkan.");
         }
-        const stagedCount = await getKamarStagingCount(db);
-        if (stagedCount !== expected.total) {
-            throw new Error(`Jumlah kamar hasil sinkronisasi tidak lengkap: ${stagedCount}/${expected.total}.`);
-        }
-        await publishKamarStaging(db, new Date().toISOString());
+        const snapshot = expected;
+        await withDatabaseSyncLock("kamar", async () => {
+            await clearKamarStaging(db);
+            await insertKamarStagingPage(db, items);
+            const stagedCount = await getKamarStagingCount(db);
+            if (stagedCount !== snapshot.total) {
+                throw new Error(`Jumlah kamar hasil sinkronisasi tidak lengkap: ${stagedCount}/${snapshot.total}.`);
+            }
+            await publishKamarStaging(db, new Date().toISOString());
+        });
     } catch (error) {
-        await clearKamarStaging(db).catch(() => undefined);
+        await withDatabaseSyncLock("kamar:failure", async () => {
+            await clearKamarStaging(db).catch(() => undefined);
+        }).catch(() => undefined);
         throw error;
     }
 }

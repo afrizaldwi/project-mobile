@@ -329,7 +329,9 @@ async function validateProfileSchema(db: SQLiteDatabase): Promise<void> {
 }
 
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
-    await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+    await db.execAsync(
+        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
+    );
     const versionRow = await db.getFirstAsync<{ user_version: number }>(
         "PRAGMA user_version",
     );

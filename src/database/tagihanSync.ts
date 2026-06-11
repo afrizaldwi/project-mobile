@@ -13,7 +13,12 @@ import {
   publish,
   stagingCount,
 } from "@/database/tagihanRepository";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import type { PaginationMeta } from "@/types/pagination";
+import {
+  getSafeErrorMessage,
+  isRecoverableApiAvailabilityError,
+} from "@/utils/apiErrors";
 import type { SQLiteDatabase } from "expo-sqlite";
 const SIZE = 50;
 const active = new Map<string, Promise<void>>();
@@ -83,7 +88,7 @@ async function paged(db: SQLiteDatabase, kind: "tagihan" | "pending") {
     count = 0;
   const ids = new Set<number>();
   try {
-    await clearStaging(db, kind, scope);
+    const items: (TagihanReminderItem | PendingPembayaranItem)[] = [];
     do {
       let r;
       try {
@@ -96,11 +101,18 @@ async function paged(db: SQLiteDatabase, kind: "tagihan" | "pending") {
               })
             : await tagihanApi.getPendingPayments({ page: p, per_page: SIZE });
       } catch (err) {
-        if (__DEV__)
-          console.error(
-            `[SYNC DIAGNOSTIC] API request failed. Kind: ${kind}, Page: ${p}`,
-            err,
-          );
+        if (__DEV__) {
+          const details = {
+            kind,
+            page: p,
+            message: getSafeErrorMessage(err),
+          };
+          if (isRecoverableApiAvailabilityError(err)) {
+            console.warn("[SYNC DIAGNOSTIC] API request unavailable", details);
+          } else {
+            console.error("[SYNC DIAGNOSTIC] API request failed", details);
+          }
+        }
         throw err;
       }
 
@@ -172,66 +184,44 @@ async function paged(db: SQLiteDatabase, kind: "tagihan" | "pending") {
         ids.add(id);
       }
       count += r.data.length;
-
-      try {
-        if (kind === "tagihan")
-          await insertTagihanStaging(db, scope, r.data as TagihanReminderItem[]);
-        else
-          await insertPendingStaging(
-            db,
-            scope,
-            r.data as PendingPembayaranItem[],
-          );
-      } catch (err) {
-        if (__DEV__)
-          console.error(
-            `[SYNC DIAGNOSTIC] Staging insert failed. Kind: ${kind}, Page: ${p}`,
-            err,
-          );
-        throw err;
-      }
+      items.push(...r.data);
 
       p++;
     } while (e && p <= e.last);
 
-    let staging_n = 0;
-    try {
-      staging_n = await stagingCount(db, kind, scope);
-      if (
-        !e ||
-        count !== e.total ||
-        ids.size !== e.total ||
-        staging_n !== e.total
-      )
-        throw new Error("Snapshot TAGIHAN tidak lengkap.");
-    } catch (err) {
-      if (__DEV__)
-        console.error(
-          `[SYNC DIAGNOSTIC] Staging-count validation failed. Kind: ${kind}, Expected: ${e?.total}, Staging: ${staging_n}, Loop Count: ${count}, Set Size: ${ids.size}`,
-          err,
-        );
-      throw err;
-    }
+    if (!e || count !== e.total || ids.size !== e.total)
+      throw new Error("Snapshot TAGIHAN tidak lengkap.");
+    const snapshot = e;
 
-    try {
-      await publish(db, kind, scope, e.total);
+    await withDatabaseSyncLock(keyFor(kind, scope), async () => {
+      await clearStaging(db, kind, scope);
+      if (kind === "tagihan") {
+        await insertTagihanStaging(db, scope, items as TagihanReminderItem[]);
+      } else {
+        await insertPendingStaging(db, scope, items as PendingPembayaranItem[]);
+      }
+
+      const staging_n = await stagingCount(db, kind, scope);
+      if (staging_n !== snapshot.total) {
+        throw new Error("Snapshot TAGIHAN tidak lengkap.");
+      }
+
+      await publish(db, kind, scope, snapshot.total);
       if (__DEV__)
         console.debug(
-          `[SYNC DIAGNOSTIC] Publication complete. Kind: ${kind}, Total: ${e.total}, Last Page: ${e.last}`,
+          `[SYNC DIAGNOSTIC] Publication complete. Kind: ${kind}, Total: ${snapshot.total}, Last Page: ${snapshot.last}`,
         );
-    } catch (err) {
-      if (__DEV__) console.error(`[SYNC DIAGNOSTIC] Atomic publication failed. Kind: ${kind}`, err);
-      throw err;
-    }
+    });
   } catch (err) {
-    await clearStaging(db, kind, scope).catch(() => undefined);
-    await markDirty(db, kind, scope).catch(() => undefined);
+    await withDatabaseSyncLock(`${keyFor(kind, scope)}:failure`, async () => {
+      await clearStaging(db, kind, scope).catch(() => undefined);
+      await markDirty(db, kind, scope).catch(() => undefined);
+    }).catch(() => undefined);
     throw err;
   }
 }
 async function tenant(db: SQLiteDatabase, scope: string) {
   try {
-    await clearStaging(db, "tagihan", scope);
     const data = await tagihanApi.getPenyewaTagihan();
     const ids = new Set<number>();
     for (const x of data) {
@@ -239,15 +229,23 @@ async function tenant(db: SQLiteDatabase, scope: string) {
       if (ids.has(x.id_tagihan)) throw new Error("ID TAGIHAN duplikat.");
       ids.add(x.id_tagihan);
     }
-    await insertTagihanStaging(db, scope, data);
-    if ((await stagingCount(db, "tagihan", scope)) !== data.length)
-      throw new Error("Snapshot TAGIHAN tidak lengkap.");
-    await publish(db, "tagihan", scope, data.length);
+    await withDatabaseSyncLock(`tagihan:${scope}`, async () => {
+      await clearStaging(db, "tagihan", scope);
+      await insertTagihanStaging(db, scope, data);
+      if ((await stagingCount(db, "tagihan", scope)) !== data.length)
+        throw new Error("Snapshot TAGIHAN tidak lengkap.");
+      await publish(db, "tagihan", scope, data.length);
+    });
   } catch (err) {
-    await clearStaging(db, "tagihan", scope).catch(() => undefined);
-    await markDirty(db, "tagihan", scope).catch(() => undefined);
+    await withDatabaseSyncLock(`tagihan:${scope}:failure`, async () => {
+      await clearStaging(db, "tagihan", scope).catch(() => undefined);
+      await markDirty(db, "tagihan", scope).catch(() => undefined);
+    }).catch(() => undefined);
     throw err;
   }
+}
+function keyFor(kind: "tagihan" | "pending", scope: string) {
+  return kind === "tagihan" ? `tagihan:${scope}` : `pending:${scope}`;
 }
 function run(
   key: string,

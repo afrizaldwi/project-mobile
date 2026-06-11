@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { keluhanService } from "@/api/keluhanService";
+import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import { clearKeluhanStaging, getKeluhanStagingCount, insertKeluhanStagingPage, markKeluhanCacheDirty, publishKeluhanStaging } from "@/database/keluhanRepository";
 import type { Keluhan } from "@/types";
 import type { AdminKeluhanSummary } from "@/types/keluhan";
@@ -24,20 +25,24 @@ function validatePage(page: number, meta: PaginationMeta, itemCount: number, exp
     return expected ?? { total: meta.total, lastPage: meta.last_page, perPage: meta.per_page };
 }
 async function runKeluhanSync(db: SQLiteDatabase): Promise<void> {
-    let page = 1; let traversedCount = 0; let expected: ExpectedSnapshot | null = null; const seenIds = new Set<number>();
+    let page = 1; let traversedCount = 0; let expected: ExpectedSnapshot | null = null; const seenIds = new Set<number>(); const items: Keluhan[] = [];
     try {
-        await clearKeluhanStaging(db);
         do {
             const response = await keluhanService.getAdminKeluhans({ page, per_page: SYNC_PAGE_SIZE, status: "semua" });
             if (!response || !Array.isArray(response.data) || !response.summary) throw new Error("Respons sinkronisasi KELUHAN tidak valid.");
             validateSummary(response.summary); expected = validatePage(page, response.meta, response.data.length, expected);
             for (const item of response.data) { validateItem(item); if (seenIds.has(item.id_keluhan)) throw new Error(`Sinkronisasi KELUHAN berisi id_keluhan duplikat: ${item.id_keluhan}.`); seenIds.add(item.id_keluhan); }
-            traversedCount += response.data.length; await insertKeluhanStagingPage(db, response.data); page += 1;
+            traversedCount += response.data.length; items.push(...response.data); page += 1;
         } while (expected && page <= expected.lastPage);
         if (!expected || page - 1 !== expected.lastPage || traversedCount !== expected.total || seenIds.size !== expected.total) throw new Error("Jumlah KELUHAN hasil sinkronisasi tidak sesuai metadata.");
-        const stagedCount = await getKeluhanStagingCount(db); if (stagedCount !== expected.total) throw new Error(`Jumlah staging KELUHAN tidak lengkap: ${stagedCount}/${expected.total}.`);
-        await publishKeluhanStaging(db, expected.total, new Date().toISOString());
-    } catch (error) { await clearKeluhanStaging(db).catch(() => undefined); await markKeluhanCacheDirty(db).catch(() => undefined); throw error; }
+        const snapshot = expected;
+        await withDatabaseSyncLock("keluhan:admin", async () => {
+            await clearKeluhanStaging(db);
+            await insertKeluhanStagingPage(db, items);
+            const stagedCount = await getKeluhanStagingCount(db); if (stagedCount !== snapshot.total) throw new Error(`Jumlah staging KELUHAN tidak lengkap: ${stagedCount}/${snapshot.total}.`);
+            await publishKeluhanStaging(db, snapshot.total, new Date().toISOString());
+        });
+    } catch (error) { await withDatabaseSyncLock("keluhan:admin:failure", async () => { await clearKeluhanStaging(db).catch(() => undefined); await markKeluhanCacheDirty(db).catch(() => undefined); }).catch(() => undefined); throw error; }
 }
 export function synchronizeKeluhanCache(db: SQLiteDatabase, requireNewRun = false): Promise<void> {
     if (activeSync) {

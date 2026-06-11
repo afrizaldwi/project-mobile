@@ -1,8 +1,9 @@
 import { SQLiteProvider } from "expo-sqlite";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Text, View } from "react-native";
 
 import { APP_DATABASE_NAME, initializeDatabase } from "@/database/database";
+import { hideNativeSplash } from "@/utils/nativeSplash";
 
 type DatabaseProviderProps = {
     children: ReactNode;
@@ -10,6 +11,12 @@ type DatabaseProviderProps = {
 
 export function DatabaseProvider({ children }: DatabaseProviderProps) {
     const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (error) {
+            void hideNativeSplash("database-init-error");
+        }
+    }, [error]);
 
     if (error) {
         return (
