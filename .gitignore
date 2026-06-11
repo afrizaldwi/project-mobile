@@ -5,9 +5,12 @@ node_modules/
 
 # Expo
 .expo/
+.expo-tmp-bundle
 dist/
 web-build/
 expo-env.d.ts
+
+.vscode/
 
 # Native
 .kotlin/
