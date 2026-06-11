@@ -1,3 +1,5 @@
+# Panduan Instalasi
+
 ## 1. Clone Repository
 
 Clone repository mobile:
@@ -9,34 +11,7 @@ cd <repository-mobile>
 
 ---
 
-## 2. Pindah ke Branch Develop
-
-Untuk development, gunakan branch `develop`.
-
-Jalankan:
-
-```bash
-git checkout develop
-```
-
-Pastikan branch aktif sudah benar:
-
-```bash
-git branch -a
-```
-
-Branch aktif ditandai dengan simbol `*`.
-
-Contoh:
-
-```text
-* develop
-  main
-```
-
----
-
-## 3. Install Dependency
+## 2. Install Dependency
 
 Jalankan perintah berikut:
 
@@ -46,136 +21,33 @@ npm install
 
 ---
 
-## 4. Buat File Environment
+## 3. Jalankan Server
 
-Buat file `.env` di root project.
+Sebelum menjalankan aplikasi mobile, jalankan server dari project web terlebih dahulu.
 
-Contoh struktur:
-
-```text
-project-mobile/
-├── .env
-├── package.json
-├── src/
-└── ...
-```
-
-Isi file `.env`:
-
-```env
-EXPO_PUBLIC_API_BASE_URL=http://IP_LAPTOP_ANDA:8000/api
-```
-
-Contoh:
-
-```env
-EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
-```
-
-URL wajib menggunakan `http://` atau `https://`.
-
-Benar:
-
-```env
-EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
-```
-
-Salah:
-
-```env
-EXPO_PUBLIC_API_BASE_URL=192.168.x.x:8000/api
-```
-
----
-
-## 5. Jalankan Backend
-
-Sebelum menjalankan aplikasi mobile, jalankan backend dari project web terlebih dahulu.
-
-Pastikan container backend, nginx, dan database di Docker Desktop berjalan.
+Pastikan container server, nginx, dan database di Docker Desktop berjalan.
 
 Cek dari browser laptop:
 
 ```text
-http://localhost:8000/api/profile
+http://localhost:8000
 ```
 
-Jika muncul:
-
-```text
-Unauthenticated
-```
-
-berarti backend sudah berjalan.
+Jika muncul halaman laravel maka server sudah berjalan
 
 ---
 
-## 6. Cek IP Laptop
+## 4. Cek Koneksi dari HP
 
-Cari IP laptop yang digunakan pada jaringan Wi-Fi.
+Pastikan HP dan laptop berada di jaringan yang sama. Buka browser HP dan akses:
 
-Di Windows, jalankan:
+http://IP_LAPTOP_ANDA:8000
 
-```bash
-ipconfig
-```
-
-Cari bagian adapter Wi-Fi, lalu lihat:
-
-```text
-IPv4 Address
-```
-
-Contoh:
-
-```text
-192.168.x.x
-```
-
-IP tersebut digunakan pada file `.env`:
-
-```env
-EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000/api
-```
+Jika website laravel muncul, koneksi berhasil.
 
 ---
 
-## 7. Cek Koneksi Backend dari HP
-
-Pastikan HP dan laptop berada di jaringan yang sama.
-
-Buka browser di HP, lalu akses:
-
-```text
-http://IP_LAPTOP_ANDA:8000/api/profile
-```
-
-Contoh:
-
-```text
-http://192.168.x.x:8000/api/profile
-```
-
-Jika muncul:
-
-```text
-Unauthenticated
-```
-
-berarti HP sudah bisa mengakses backend.
-
-Jika tidak bisa diakses, periksa:
-
-- IP laptop sudah benar
-- HP dan laptop berada di jaringan yang sama
-- Backend Docker sudah berjalan
-- Port `8000` tidak diblokir firewall
-- URL di `.env` sudah benar
-- Network laptop sebaiknya menggunakan mode Private jika berada di jaringan terpercaya
-
----
-
-## 8. Jalankan Project Mobile
+## 5. Jalankan Project Mobile
 
 Jalankan Expo:
 
@@ -187,7 +59,7 @@ Scan QR code menggunakan aplikasi **Expo Go** di HP Android.
 
 ---
 
-## 9. Cek Aplikasi
+## 6. Cek Aplikasi
 
 Setelah aplikasi terbuka di Expo Go, lakukan pengecekan berikut:
 
@@ -201,39 +73,54 @@ Setelah aplikasi terbuka di Expo Go, lakukan pengecekan berikut:
 
 ---
 
-## 10. Checklist Sebelum Development
+# Features Developed
 
-Pastikan semua ini sudah berhasil:
+## Login
 
-- Sudah berada di branch `develop`
-- Dependency sudah diinstall
-- File `.env` sudah dibuat
-- URL di `.env` menggunakan `http://`
-- Backend Laravel berjalan
-- HP bisa membuka `/api/profile`
-- Expo Go bisa membuka aplikasi
-- Login admin berhasil
-- Login penyewa berhasil
-- Logout berhasil
+Fitur Login digunakan sebagai pintu masuk pengguna ke dalam sistem Manajemen Kost. Pengguna harus memasukkan kredensial yang valid sebelum dapat mengakses fitur yang tersedia.
+
+## Dashboard
+
+Dashboard merupakan halaman utama yang ditampilkan setelah pengguna berhasil login. Halaman ini memberikan gambaran umum mengenai informasi penting dalam sistem Manajemen Kost.
+
+## Laporan Kerusakan
+
+Menyediakan fitur bagi penyewa untuk melapor kerusakan via Mobile dan website dan ditindaklanjuti oleh Admin via Web dan mobile. Foto kerusakan yang diunggah penyewa dari Mobile akan muncul di halaman Admin sebagai tugas yang harus diselesaikan.
+
+## Pendataan Tamu
+
+Mengelola catatan kunjungan tamu harian secara terstruktur untuk keperluan keamanan kost.
+
+## Fitur Notifikasi Jatuh Tempo
+
+Mendeteksi tagihan yang mendekati tanggal jatuh tempo (kurang dari atau sama dengan 7 hari) dan otomatis membuat notifikasi sistem serta mengirimkan Push Notification ke HP penyewa.
+
+## Fitur Penagihan WhatsApp
+
+Mengirim pesan pengingat tagihan kost secara personal langsung ke WhatsApp penyewa dengan pesan yang sudah terformat otomatis.
+
+## Fitur Data Penghuni
+
+Fitur Data Penghuni digunakan untuk mengelola informasi penghuni yang terdaftar dalam sistem, seperti nama, alamat, nomor kamar atau unit, kontak, serta metode pembayaran. Admin dapat Mengelola basis data penghuni aktif serta sistem pengarsipan riwayat penyewaan untuk data alumni.
+
+## Invoice Transaksi
+
+Membuat generator invoice otomatis berbasis data pembayaran yang dapat diunduh dalam format PDF. Invoice yang dibuat oleh Admin di Web setelah pembayaran dikonfirmasi akan langsung tersedia untuk diunduh oleh Penyewa di Mobile.
+
+## Laporan Keuangan
+
+Mengolah data transaksi menjadi laporan periodik yang dapat diekspor ke format Excel (CSV).
+
+## Manajemen Data Kamar
+
+Mengelola data inventaris kamar kost, termasuk fitur unggah foto fasilitas, luas, status dan pengaturan harga sewa.
+
+## Perpanjangan Masa Sewa
+
+Membuat logika sistem kalkulasi otomatis untuk tanggal berakhir dan biaya sewa baru saat melakukan perpanjangan sewa.
+
+## Laporan Keuangan
+
+Mencatat pengeluaran operasional dan menghitung laba bersih kost (Pemasukan - Pengeluaran).
 
 ---
-
-## 11. Membuat Branch Fitur
-
-Sebelum membuat fitur baru, pastikan berada di branch `develop` dan branch tersebut sudah terbaru.
-
-```bash
-git checkout develop
-```
-
-Buat branch fitur dari `develop`:
-
-```bash
-git checkout -b fitur-nama
-```
-
-Contoh:
-
-```bash
-git checkout -b fitur-afrizal
-```
