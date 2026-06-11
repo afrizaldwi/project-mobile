@@ -11,10 +11,15 @@ export default function AdminKeluhanScreen() {
     const {
         loading,
         refreshing,
+        loadingMore,
+        error,
+        notice,
         filter,
         setFilter,
-        filteredKeluhans,
+        keluhans,
         onRefresh,
+        loadMore,
+        retry,
         handleDelete,
         handleUpdateStatus,
         handleExport,
@@ -32,8 +37,13 @@ export default function AdminKeluhanScreen() {
                 <AdminKeluhanList
                     loading={loading}
                     refreshing={refreshing}
-                    keluhans={filteredKeluhans}
+                    loadingMore={loadingMore}
+                    error={error}
+                    notice={notice}
+                    keluhans={keluhans}
                     onRefresh={onRefresh}
+                    onLoadMore={loadMore}
+                    onRetry={retry}
                     onDelete={handleDelete}
                     onUpdateStatus={handleUpdateStatus}
                 />

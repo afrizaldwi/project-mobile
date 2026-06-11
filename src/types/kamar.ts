@@ -1,3 +1,17 @@
+import type { PaginatedResponse } from "@/types/pagination";
+
+export type KamarApiItem = {
+    id_kamar: number;
+    nomor_kamar: string;
+    luas_kamar: string;
+    fasilitas: string;
+    harga_bulanan: string;
+    status_kamar: KamarStatus;
+    foto_kamar: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
 export type KamarStatus = "tersedia" | "terisi" | "perbaikan";
 
 export type Kamar = {
@@ -5,7 +19,7 @@ export type Kamar = {
     nomor_kamar: string;
     luas_kamar: string;
     fasilitas: string;
-    harga_bulanan: number;
+    harga_bulanan: string;
     status_kamar: KamarStatus;
     foto_kamar: string | null;
     created_at: string;
@@ -27,13 +41,21 @@ export type KamarPayload = {
     foto_kamar?: FotoPayload;
 };
 
-export type KamarListResponse = {
-    data: Kamar[];
+export type KamarListParams = {
+    page: number;
+    per_page: number;
+    search?: string;
+    status?: KamarStatus | "semua";
+};
+
+export type KamarStats = {
     total: number;
     tersedia: number;
     terisi: number;
     perbaikan: number;
 };
+
+export type KamarListResponse = PaginatedResponse<Kamar> & KamarStats;
 
 /** Kamar yang bisa dipilih saat tambah penghuni */
 export type KamarTersedia = Pick<

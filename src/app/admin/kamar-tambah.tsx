@@ -12,9 +12,11 @@ import {
 
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { createKamar } from "@/api/kamarService";
+import { markKamarCacheDirty } from "@/database/kamarRepository";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
@@ -27,6 +29,7 @@ const STATUS_OPTIONS: { label: string; value: KamarStatus; color: string }[] = [
 
 export default function KamarTambahScreen() {
     const insets = useSafeAreaInsets();
+    const db = useSQLiteContext();
 
     const [nomorKamar, setNomorKamar] = useState("");
     const [luasKamar, setLuasKamar] = useState("");
@@ -61,8 +64,8 @@ export default function KamarTambahScreen() {
             Alert.alert("Validasi", "Semua field wajib diisi.");
             return;
         }
-        const hargaNum = harga.replace(/\D/g, "");
-        if (!hargaNum || parseInt(hargaNum) <= 0) {
+        const hargaValue = harga.trim();
+        if (!/^\d+(?:\.\d+)?$/.test(hargaValue) || !/[1-9]/.test(hargaValue)) {
             Alert.alert("Validasi", "Harga harus berupa angka yang valid.");
             return;
         }
@@ -70,13 +73,14 @@ export default function KamarTambahScreen() {
             nomor_kamar: nomorKamar.trim(),
             luas_kamar: luasKamar.trim(),
             fasilitas: fasilitas.trim(),
-            harga_bulanan: hargaNum,
+            harga_bulanan: hargaValue,
             status_kamar: status,
             ...(foto ? { foto_kamar: foto } : {}),
         };
         try {
             setLoading(true);
             await createKamar(payload);
+            await markKamarCacheDirty(db);
             Alert.alert("Berhasil", "Kamar berhasil ditambahkan.", [
                 { text: "OK", onPress: () => router.back() },
             ]);

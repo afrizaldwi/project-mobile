@@ -4,17 +4,17 @@ import { Penghuni } from "@/hooks/usePenghuni";
 
 interface PenghuniCardProps {
     item: Penghuni;
-    activeTab: "AKTIF" | "NON AKTIF";
-    onArchive: (id: string) => void;
+    onArchive: (id: number) => void;
     onPerpanjang: (item: Penghuni) => void;
 }
 
 export const PenghuniCard: React.FC<PenghuniCardProps> = ({
     item,
-    activeTab,
     onArchive,
     onPerpanjang,
 }) => {
+    const isActive = item.status === "AKTIF";
+
     return (
         <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100">
             {/* Top row: Kamar Info & Status */}
@@ -28,13 +28,13 @@ export const PenghuniCard: React.FC<PenghuniCardProps> = ({
                 <View
                     className="px-2.5 py-0.5 rounded-full"
                     style={{
-                        backgroundColor: item.status === "AKTIF" ? "#dcfce7" : "#fee2e2"
+                        backgroundColor: isActive ? "#dcfce7" : item.status === "SELESAI" ? "#dbeafe" : "#fee2e2"
                     }}
                 >
                     <Text
                         className="text-xs font-bold"
                         style={{
-                            color: item.status === "AKTIF" ? "#16a34a" : "#dc2626"
+                            color: isActive ? "#16a34a" : item.status === "SELESAI" ? "#2563eb" : "#dc2626"
                         }}
                     >
                         {item.status}
@@ -64,7 +64,7 @@ export const PenghuniCard: React.FC<PenghuniCardProps> = ({
             </View>
 
             {/* Action Buttons for Active Tenants */}
-            {activeTab === "AKTIF" && (
+            {isActive && (
                 <View className="flex-row justify-end items-center mt-3 pt-3 border-t border-gray-100">
                     <TouchableOpacity
                         onPress={() => onPerpanjang(item)}
@@ -73,7 +73,7 @@ export const PenghuniCard: React.FC<PenghuniCardProps> = ({
                         <Text className="text-xs font-semibold text-gray-500">Perpanjang</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        onPress={() => onArchive(item.id)}
+                        onPress={() => onArchive(item.id_sewa)}
                         className="bg-red-50 px-3 py-1.5 rounded-lg border border-red-100"
                     >
                         <Text className="text-xs font-semibold text-red-600">Arsipkan</Text>

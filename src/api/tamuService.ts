@@ -1,5 +1,11 @@
 import { apiClient } from "@/api/client";
 import type { Tamu } from "@/types";
+import type {
+    AdminTamuListParams,
+    AdminTamuListResponse,
+    GetAdminTamusOptions,
+    PenyewaTamuListResponse,
+} from "@/types/tamu";
 
 // ============================================================
 // Tipe data payload untuk setiap operasi
@@ -27,9 +33,21 @@ export interface PenghuniAktif {
 export const createTamuService = (client = apiClient) => {
     return {
         // --- Metode untuk Admin ---
-        getAdminTamus: async (): Promise<Tamu[]> => {
-            const response = await client.get<{ data: Tamu[] }>("/admin/tamu");
-            return response.data.data;
+        getAdminTamus: async (
+            options: GetAdminTamusOptions = {}
+        ): Promise<AdminTamuListResponse> => {
+            const trimmedSearch = options.search?.trim().slice(0, 100);
+            const params: AdminTamuListParams = {
+                page: options.page,
+                per_page: options.per_page,
+                search: trimmedSearch || undefined,
+                id_user: options.id_user,
+            };
+            const response = await client.get<AdminTamuListResponse>("/admin/tamu", {
+                params,
+                signal: options.signal,
+            });
+            return response.data;
         },
 
         createAdminTamu: async (payload: CreateTamuPayload): Promise<void> => {
@@ -47,7 +65,7 @@ export const createTamuService = (client = apiClient) => {
 
         // --- Metode untuk Penyewa ---
         getPenyewaTamus: async (): Promise<Tamu[]> => {
-            const response = await client.get<{ data: Tamu[] }>("/penyewa/tamu");
+            const response = await client.get<PenyewaTamuListResponse>("/penyewa/tamu");
             return response.data.data;
         },
 

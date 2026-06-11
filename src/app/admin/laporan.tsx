@@ -1,6 +1,13 @@
-﻿import { Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useLaporanKeuangan } from "@/hooks/useLaporanKeuangan";
@@ -19,16 +26,19 @@ export default function AdminLaporanScreen() {
         setTahun,
         data,
         isLoading,
+        isRefreshing,
         isSubmitting,
         showExpenseForm,
         setShowExpenseForm,
         errorMessage,
+        notice,
         monthOptions,
         form,
         setForm,
         handleSubmitExpense,
         handleDeleteExpense,
         formatCurrency,
+        refresh,
     } = useLaporanKeuangan();
 
     // Table active tab state
@@ -68,6 +78,12 @@ export default function AdminLaporanScreen() {
                     className="flex-1"
                     contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={refresh}
+                        />
+                    }
                 >
                     {/* Controls Bar */}
                     <View className="mx-6 mb-6 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex-col gap-3">
@@ -108,9 +124,14 @@ export default function AdminLaporanScreen() {
                             <Text className="text-sm font-semibold text-danger">{errorMessage}</Text>
                         </View>
                     ) : null}
+                    {notice ? (
+                        <View className="mx-6 mb-6 rounded-xl border border-primary/20 bg-primary/10 p-4">
+                            <Text className="text-sm font-semibold text-primary">{notice}</Text>
+                        </View>
+                    ) : null}
 
                     {/* Loading Indicator */}
-                    {isLoading ? (
+                    {isLoading && !data ? (
                         <View className="py-20 justify-center items-center">
                             <ActivityIndicator size="large" color="#2563eb" />
                             <Text className="text-gray-500 mt-3 font-semibold">Memuat data laporan...</Text>

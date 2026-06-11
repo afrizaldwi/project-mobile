@@ -1,4 +1,6 @@
+import { useAuth } from "@/auth/AuthContext";
 import { useRouter } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import React, { useState } from "react";
 import {
     ActivityIndicator,
@@ -14,9 +16,14 @@ import {
 
 import { tamuService } from "@/api/tamuService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { markPenyewaTamuDirty } from "@/database/penyewaTamuRepository";
+import { markTamuCacheDirty } from "@/database/tamuRepository";
+import { getConnectivityStatus } from "@/network/connectivity";
 
 export default function TambahTamuScreen() {
     const router = useRouter();
+    const db = useSQLiteContext();
+    const { user } = useAuth();
     const [nama, setNama] = useState("");
     const [noHp, setNoHp] = useState("");
     const [keperluan, setKeperluan] = useState("");
@@ -27,6 +34,14 @@ export default function TambahTamuScreen() {
             Alert.alert("Validasi Error", "Semua kolom wajib diisi.");
             return;
         }
+        const status = await getConnectivityStatus();
+        if (status === "offline") {
+            Alert.alert(
+                "Koneksi Diperlukan",
+                "Tindakan ini membutuhkan koneksi internet.",
+            );
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -35,6 +50,10 @@ export default function TambahTamuScreen() {
                 no_hp_tamu: noHp,
                 keperluan: keperluan,
             });
+            await markTamuCacheDirty(db).catch(() => undefined);
+            if (user) {
+                await markPenyewaTamuDirty(db, `penyewa:${user.id}`).catch(() => undefined);
+            }
 
             Alert.alert("Sukses", "Data tamu berhasil ditambahkan.", [
                 {

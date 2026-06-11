@@ -31,7 +31,7 @@ export interface PengeluaranItem {
     pencatat?: {
         id: number;
         nama_lengkap: string;
-    };
+    } | null;
 }
 
 export interface LaporanKeuanganResponse {

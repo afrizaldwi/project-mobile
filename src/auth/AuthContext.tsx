@@ -13,7 +13,7 @@ import { Alert } from "react-native";
 
 import { setAuthSessionInactiveHandler } from "@/api/client";
 import * as authService from "@/auth/authService";
-import { getToken } from "@/auth/tokenStorage";
+import { deleteCachedUser, deleteToken, getCachedUser, getToken } from "@/auth/tokenStorage";
 import { NotificationFacade } from "@/services/NotificationFacade";
 import type { LoginPayload, User } from "@/types";
 
@@ -29,6 +29,10 @@ type AuthContextValue = {
 type AuthProviderProps = {
     children: ReactNode;
 };
+
+function getHttpStatus(error: unknown): number | undefined {
+    return (error as { response?: { status?: number } }).response?.status;
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -74,10 +78,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             const currentUser = await authService.getCurrentUser();
             setUser(currentUser);
-        } catch {
-            setUser(null);
-            NotificationFacade.resetNotifiedNotifications();
-            await authService.logout();
+        } catch (error) {
+            const status = getHttpStatus(error);
+            if (status === 401 || status === 403) {
+                await deleteToken();
+                await deleteCachedUser();
+                setUser(null);
+                NotificationFacade.resetNotifiedNotifications();
+                return;
+            }
+
+            setUser(await getCachedUser());
         } finally {
             setIsLoading(false);
         }

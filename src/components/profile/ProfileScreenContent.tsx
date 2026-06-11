@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     Keyboard,
     KeyboardAvoidingView,
+    RefreshControl,
     ScrollView,
     Text,
     TextInput,
@@ -12,31 +13,21 @@ import {
     View
 } from "react-native";
 
-import { apiClient } from "@/api/client";
+import { profileService } from "@/api/profileService";
 import { useAuth } from "@/auth/AuthContext";
-import { deleteToken } from "@/auth/tokenStorage";
-import type { User, UserRole } from "@/types";
+import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
+import { useProfile } from "@/hooks/useProfile";
+import { getConnectivityStatus } from "@/network/connectivity";
+import type { UserRole } from "@/types";
+import type {
+    PasswordChangePayload,
+} from "@/types/profile";
 
 type PasswordField = "current_password" | "password" | "password_confirmation";
 
-type PasswordForm = Record<PasswordField, string>;
+type PasswordForm = PasswordChangePayload;
 
 type PasswordErrors = Partial<Record<PasswordField, string>>;
-
-type ProfileUser = User & {
-    no_hp?: string | null;
-    foto_profil?: string | null;
-    alamat_asal?: string | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-    sewa?: Record<string, unknown> | null;
-    kamar?: Record<string, unknown> | null;
-    status_sewa?: string | null;
-};
-
-type ProfileResponse = {
-    user: ProfileUser;
-};
 
 type ValidationErrorResponse = {
     message?: string;
@@ -102,31 +93,20 @@ function InfoRow({ label, value }: { label: string; value: unknown }) {
 export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenContentProps) {
     const router = useRouter();
     const { refreshUser } = useAuth();
-    const [profile, setProfile] = useState<ProfileUser | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const {
+        profile,
+        loading,
+        refreshing,
+        notice,
+        error,
+        isPartial,
+        isOffline,
+        refresh,
+    } = useProfile(role);
     const [passwordForm, setPasswordForm] = useState<PasswordForm>(initialPasswordForm);
     const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
     const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
     const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
-
-    const fetchProfile = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setErrorMessage(null);
-            const response = await apiClient.get<ProfileResponse>("/profile");
-            setProfile(response.data.user);
-        } catch (error) {
-            setProfile(null);
-            setErrorMessage(getErrorMessage(error, "Gagal memuat profil."));
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchProfile();
-    }, [fetchProfile]);
 
     const sewaRows = useMemo(() => {
         if (role !== "penyewa" || !profile) return [];
@@ -134,16 +114,19 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
         const sewa = profile.sewa;
         const kamar = profile.kamar;
         const rows: { label: string; value: unknown }[] = [];
-        if (kamar?.nomor_kamar) rows.push({ label: "Nomor Kamar", value: kamar.nomor_kamar });
-        if (kamar?.status_kamar) rows.push({ label: "Status Kamar", value: kamar.status_kamar });
-        if (sewa?.tanggal_masuk) rows.push({ label: "Tanggal Masuk", value: sewa.tanggal_masuk });
-        if (sewa?.tanggal_keluar) rows.push({ label: "Tanggal Keluar", value: sewa.tanggal_keluar });
-        if (sewa?.status_sewa || profile.status_sewa) {
-            rows.push({ label: "Status Sewa", value: sewa?.status_sewa || profile.status_sewa });
-        }
+        rows.push({ label: "Nomor Kamar", value: kamar?.nomor_kamar ?? null });
+        rows.push({ label: "Status Kamar", value: kamar?.status_kamar ?? null });
+        rows.push({ label: "Tanggal Masuk", value: sewa?.tanggal_masuk ?? null });
+        rows.push({ label: "Tanggal Keluar", value: sewa?.tanggal_keluar ?? null });
+        rows.push({
+            label: "Status Sewa",
+            value: sewa?.status_sewa ?? profile.status_sewa ?? null,
+        });
 
-        return rows;
-    }, [profile, role]);
+        return rows.filter(
+            (row) => !isPartial || row.value !== null,
+        );
+    }, [isPartial, profile, role]);
 
     const scrollViewRef = useRef<ScrollView>(null);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -181,12 +164,22 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
             setPasswordErrors({});
             setPasswordMessage(null);
 
-            const response = await apiClient.patch<{ message?: string }>("/profile/password", passwordForm);
-            const message = response.data.message || "Password berhasil diubah. Silakan masuk kembali.";
+            if ((await getConnectivityStatus()) === "offline") {
+                Alert.alert(
+                    "Koneksi Diperlukan",
+                    "Tindakan ini membutuhkan koneksi internet.",
+                );
+                return;
+            }
+
+            const response = await profileService.changePassword(passwordForm);
+            const message =
+                response.message || "Password berhasil diubah. Silakan masuk kembali.";
 
             setPasswordForm(initialPasswordForm);
             setPasswordMessage(message);
             await deleteToken();
+            await deleteCachedUser();
             await refreshUser();
 
             Alert.alert("Password Berhasil Diubah", message, [
@@ -216,32 +209,45 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
                 contentContainerStyle={{
                     paddingBottom: keyboardVisible ? 400 : 32,
                 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+                }
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
                 <Text className="text-2xl font-extrabold text-dark">{title}</Text>
                 <Text className="mt-1 text-sm text-gray-500">{subtitle}</Text>
 
-                {isLoading ? (
+                {loading && !profile ? (
                     <View className="mt-6 rounded-xl bg-white p-6 items-center">
                         <ActivityIndicator color="#2563eb" />
                         <Text className="mt-3 text-sm font-semibold text-gray-500">Memuat profil...</Text>
                     </View>
-                ) : errorMessage ? (
+                ) : error && !profile ? (
                     <View className="mt-6 rounded-xl border border-red-100 bg-red-50 p-4">
-                        <Text className="text-sm font-semibold text-red-700">{errorMessage}</Text>
-                        <TouchableOpacity onPress={fetchProfile} className="mt-3 rounded-lg bg-red-600 px-4 py-3">
+                        <Text className="text-sm font-semibold text-red-700">{error}</Text>
+                        <TouchableOpacity onPress={refresh} className="mt-3 rounded-lg bg-red-600 px-4 py-3">
                             <Text className="text-center text-sm font-bold text-white">Coba Lagi</Text>
                         </TouchableOpacity>
                     </View>
                 ) : profile ? (
                     <>
+                        {notice ? (
+                            <View className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                                <Text className="text-sm font-semibold text-primary">{notice}</Text>
+                            </View>
+                        ) : null}
+                        {error ? (
+                            <View className="mt-6 rounded-xl border border-red-100 bg-red-50 p-4">
+                                <Text className="text-sm font-semibold text-red-700">{error}</Text>
+                            </View>
+                        ) : null}
                         <View className="mt-6 rounded-xl bg-white p-5 shadow-sm border border-gray-100">
                             <Text className="mb-2 text-lg font-bold text-dark">Informasi Akun</Text>
                             <InfoRow label="Nama Lengkap" value={profile.nama_lengkap} />
                             <InfoRow label="Email" value={profile.email} />
                             <InfoRow label="Role" value={roleLabel(profile.role)} />
-                            <InfoRow label="Nomor HP" value={profile.no_hp ?? profile.noHp} />
+                            <InfoRow label="Nomor HP" value={profile.no_hp} />
                         </View>
 
                         {sewaRows.length > 0 ? (
@@ -260,6 +266,11 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
                     <Text className="mt-1 text-sm text-gray-500">
                         Setelah berhasil, kamu perlu login ulang.
                     </Text>
+                    {isOffline ? (
+                        <Text className="mt-2 text-sm font-semibold text-gray-500">
+                            Perubahan password memerlukan koneksi internet.
+                        </Text>
+                    ) : null}
 
                     {(Object.keys(passwordLabels) as PasswordField[]).map((field) => (
                         <View key={field} className="mt-4">

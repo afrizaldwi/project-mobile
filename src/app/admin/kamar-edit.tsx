@@ -12,10 +12,12 @@ import {
 
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { formatTanggal, getImageUrl, getKamarById, updateKamar } from "@/api/kamarService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { markKamarCacheDirty } from "@/database/kamarRepository";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
@@ -29,6 +31,7 @@ export default function KamarEditScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const kamarId = parseInt(id ?? "0", 10);
     const insets = useSafeAreaInsets();
+    const db = useSQLiteContext();
 
     const [loadingData, setLoadingData] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -52,7 +55,7 @@ export default function KamarEditScreen() {
                 setNomorKamar(kamar.nomor_kamar);
                 setLuasKamar(kamar.luas_kamar);
                 setFasilitas(kamar.fasilitas);
-                setHarga(String(kamar.harga_bulanan));
+                setHarga(kamar.harga_bulanan);
                 setStatus(kamar.status_kamar);
                 setCreatedAt(kamar.created_at);
                 setUpdatedAt(kamar.updated_at);
@@ -93,8 +96,8 @@ export default function KamarEditScreen() {
             Alert.alert("Validasi", "Semua field wajib diisi.");
             return;
         }
-        const hargaNum = harga.replace(/\D/g, "");
-        if (!hargaNum || parseInt(hargaNum) <= 0) {
+        const hargaValue = harga.trim();
+        if (!/^\d+(?:\.\d+)?$/.test(hargaValue) || !/[1-9]/.test(hargaValue)) {
             Alert.alert("Validasi", "Harga harus berupa angka yang valid.");
             return;
         }
@@ -102,13 +105,14 @@ export default function KamarEditScreen() {
             nomor_kamar: nomorKamar.trim(),
             luas_kamar: luasKamar.trim(),
             fasilitas: fasilitas.trim(),
-            harga_bulanan: hargaNum,
+            harga_bulanan: hargaValue,
             status_kamar: status,
             ...(foto ? { foto_kamar: foto } : {}),
         };
         try {
             setSaving(true);
             await updateKamar(kamarId, payload);
+            await markKamarCacheDirty(db);
             Alert.alert("Berhasil", "Data kamar berhasil diperbarui.", [
                 { text: "OK", onPress: () => router.back() },
             ]);

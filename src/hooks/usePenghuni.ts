@@ -1,11 +1,32 @@
-import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
-import { apiClient } from "@/api/client";
 
-export type StatusPenghuni = "AKTIF" | "NON AKTIF";
+import { finishAdminPenghuni } from "@/api/penghuniService";
+import { markKamarCacheDirty } from "@/database/kamarRepository";
+import {
+    getLocalPenghuniPage,
+    getPenghuniSyncMetadata,
+    hasPenghuniSnapshot,
+    markPenghuniCacheDirty,
+    type PenghuniLocalFilterStatus,
+} from "@/database/penghuniRepository";
+import { synchronizePenghuniCache } from "@/database/penghuniSync";
+import {
+    getConnectivityStatus,
+    type ConnectivityStatus,
+} from "@/network/connectivity";
+import type { PaginationMeta } from "@/types/pagination";
+import type {
+    AdminPenghuniItem,
+    AdminPenghuniItemStatus,
+} from "@/types/penghuni";
 
+export type StatusPenghuni = "AKTIF" | "SELESAI" | "DIBATALKAN";
+export type PenghuniFilterStatus = "AKTIF" | "SELESAI" | "SEMUA";
 export interface Penghuni {
-    id: string;
+    id_sewa: number;
     nama: string;
     email: string;
     kamar: string;
@@ -13,186 +34,355 @@ export interface Penghuni {
     tglMasuk: string;
     tglKeluar: string;
     status: StatusPenghuni;
-    hargaBulanan: number;
+    hargaBulanan: string;
 }
 
-interface UserResponse {
-    id: number;
-    nama_lengkap: string;
-    email: string;
-    no_hp: string;
-    foto_profil: string | null;
-    alamat_asal?: string | null;
+const PAGE_SIZE = 20;
+const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
+const LOCAL_STATUS: Record<PenghuniFilterStatus, PenghuniLocalFilterStatus> = {
+    AKTIF: "aktif",
+    SELESAI: "selesai",
+    SEMUA: "all",
+};
+const STATUS_LABEL: Record<AdminPenghuniItemStatus, StatusPenghuni> = {
+    aktif: "AKTIF",
+    selesai: "SELESAI",
+    dibatalkan: "DIBATALKAN",
+};
+function getErrorMessage(error: unknown, fallback: string): string {
+    return (
+        (error as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message ||
+        (error instanceof Error ? error.message : null) ||
+        fallback
+    );
 }
-
-interface KamarResponse {
-    id_kamar: number;
-    nomor_kamar: string;
-    harga_bulanan: number;
-    fasilitas: string | null;
+function getHttpStatus(error: unknown): number | undefined {
+    return (error as { response?: { status?: number } }).response?.status;
 }
-
-interface RiwayatSewaResponse {
-    id_sewa: number;
-    tanggal_masuk: string;
-    tanggal_keluar: string | null;
-    status_sewa: "aktif" | "selesai" | "dibatalkan";
-    user?: UserResponse;
-    kamar?: KamarResponse;
+function isFresh(value: string | null): boolean {
+    const timestamp = value ? Date.parse(value) : Number.NaN;
+    return (
+        Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS
+    );
 }
-
-const mockData: Penghuni[] = [
-    {
-        id: "1",
-        nama: "Budi Santoso",
-        email: "budi@kost.com",
-        kamar: "A-01",
-        ukuranKamar: "3x3 m",
-        tglMasuk: "2026-04-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "2",
-        nama: "Siti Aminah",
-        email: "siti@kost.com",
-        kamar: "A-02",
-        ukuranKamar: "3x3 m",
-        tglMasuk: "2026-03-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "3",
-        nama: "Andi Pratama",
-        email: "andi@kost.com",
-        kamar: "B-01",
-        ukuranKamar: "4x3 m",
-        tglMasuk: "2026-02-01",
-        tglKeluar: "-",
-        status: "AKTIF",
-        hargaBulanan: 0,
-    },
-    {
-        id: "4",
-        nama: "Rina Lestari",
-        email: "rina@kost.com",
-        kamar: "B-02",
-        ukuranKamar: "4x3 m",
-        tglMasuk: "2025-09-01",
-        tglKeluar: "2026-03-31",
-        status: "NON AKTIF",
-        hargaBulanan: 0,
-    },
-];
-
-const mapResponseToPenghuni = (sewa: RiwayatSewaResponse): Penghuni => {
+function mapResponseToPenghuni(sewa: AdminPenghuniItem): Penghuni {
     return {
-        id: sewa.id_sewa.toString(),
+        id_sewa: sewa.id_sewa,
         nama: sewa.user?.nama_lengkap || "—",
         email: sewa.user?.email || "—",
         kamar: sewa.kamar?.nomor_kamar || "—",
-        ukuranKamar: sewa.kamar?.fasilitas || "3x3 m",
+        ukuranKamar: sewa.kamar?.luas_kamar || sewa.kamar?.fasilitas || "—",
         tglMasuk: sewa.tanggal_masuk,
         tglKeluar: sewa.tanggal_keluar || "—",
-        status: sewa.status_sewa === "aktif" ? "AKTIF" : "NON AKTIF",
-        hargaBulanan: Number(sewa.kamar?.harga_bulanan || 0),
+        status: STATUS_LABEL[sewa.status_sewa],
+        hargaBulanan: sewa.kamar?.harga_bulanan || "0",
     };
-};
+}
 
 export function usePenghuni() {
-    const [activeTab, setActiveTab] = useState<"AKTIF" | "NON AKTIF">("AKTIF");
-    const [searchQuery, setSearchQuery] = useState("");
+    const db = useSQLiteContext();
+    const [activeTab, setActiveTabState] =
+        useState<PenghuniFilterStatus>("AKTIF");
+    const [searchQuery, setSearchQueryState] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [data, setData] = useState<Penghuni[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [meta, setMeta] = useState<PaginationMeta | null>(null);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [connectivity, setConnectivity] =
+        useState<ConnectivityStatus>("unknown");
     const [error, setError] = useState<string | null>(null);
-
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            // Maps to Laravel backend endpoint prefix /admin/penghuni
-            // status parameter accepts 'aktif' or 'selesai'
-            const statusParam = activeTab === "AKTIF" ? "aktif" : "selesai";
-            const res = await apiClient.get<{ data: RiwayatSewaResponse[] }>("/admin/penghuni", {
-                params: { status: statusParam }
-            });
-
-            if (res.data && Array.isArray(res.data.data)) {
-                let mappedData = res.data.data.map(mapResponseToPenghuni);
-
-                // Client-side search filtering
-                if (searchQuery.trim()) {
-                    const q = searchQuery.toLowerCase();
-                    mappedData = mappedData.filter(item =>
-                        item.nama.toLowerCase().includes(q) ||
-                        item.kamar.toLowerCase().includes(q) ||
-                        item.email.toLowerCase().includes(q)
-                    );
-                }
-
-                setData(mappedData);
-            } else {
-                throw new Error("Format respons tidak valid");
-            }
-        } catch (err: any) {
-            console.log("Error fetching data, using fallback mock data:", err?.message || err);
-            // Fallback to local mock data
-            const filteredMock = mockData.filter((item) => {
-                const matchesTab = item.status === activeTab;
-                const matchesSearch =
-                    item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    item.kamar.toLowerCase().includes(searchQuery.toLowerCase());
-                return matchesTab && matchesSearch;
-            });
-            setData(filteredMock);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [activeTab, searchQuery]);
-
-    const handleArchive = async (idSewa: string) => {
-        Alert.alert(
-            "Konfirmasi",
-            "Apakah Anda yakin ingin mengarsipkan penghuni ini sebagai alumni?",
-            [
-                { text: "Batal", style: "cancel" },
-                {
-                    text: "Arsipkan",
-                    style: "destructive",
-                    onPress: async () => {
-                        setIsLoading(true);
-                        try {
-                            const res = await apiClient.patch<{ message: string }>(`/admin/penghuni/${idSewa}/selesaikan`);
-                            Alert.alert("Sukses", res.data.message || "Penghuni berhasil diarsipkan.");
-                            fetchData();
-                        } catch (err: any) {
-                            console.log("Error archiving tenant:", err?.response?.data || err);
-                            const msg = err?.response?.data?.message || "Gagal mengarsipkan penghuni.";
-                            Alert.alert("Gagal", msg);
-                            setIsLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+    const [notice, setNotice] = useState<string | null>(null);
+    const mountedRef = useRef(false);
+    const focusedRef = useRef(false);
+    const generationRef = useRef(0);
+    const loadingMoreRef = useRef(false);
+    const requestedPageRef = useRef<number | null>(null);
+    const queryRef = useRef({ search: "", status: LOCAL_STATUS.AKTIF });
+    queryRef.current = {
+        search: debouncedSearch,
+        status: LOCAL_STATUS[activeTab],
     };
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            generationRef.current += 1;
+        };
+    }, []);
+    useEffect(() => {
+        const timeout = setTimeout(
+            () => setDebouncedSearch(searchQuery.trim().slice(0, 100)),
+            350,
+        );
+        return () => clearTimeout(timeout);
+    }, [searchQuery]);
+
+    const loadFirstPage = useCallback(
+        async (soft = false) => {
+            const generation = generationRef.current + 1;
+            generationRef.current = generation;
+            loadingMoreRef.current = false;
+            requestedPageRef.current = null;
+            if (mountedRef.current) {
+                setLoadingMore(false);
+                setError(null);
+                if (!soft) {
+                    setInitialLoading(true);
+                    setData([]);
+                    setMeta(null);
+                }
+            }
+            try {
+                const query = queryRef.current;
+                const response = await getLocalPenghuniPage(db, {
+                    page: 1,
+                    per_page: PAGE_SIZE,
+                    search: query.search || undefined,
+                    status: query.status,
+                });
+                if (!mountedRef.current || generation !== generationRef.current) return;
+                setData(response.data.map(mapResponseToPenghuni));
+                setMeta(response.meta);
+            } catch (loadError) {
+                if (mountedRef.current && generation === generationRef.current)
+                    setError(
+                        getErrorMessage(loadError, "Gagal membaca cache PENGHUNI lokal."),
+                    );
+            } finally {
+                if (mountedRef.current && generation === generationRef.current)
+                    setInitialLoading(false);
+            }
+        },
+        [db],
+    );
+
+    const syncAndReload = useCallback(
+        async (force: boolean, showRefresh = false, cacheUsable = true) => {
+            if (mountedRef.current && showRefresh) setRefreshing(true);
+            try {
+                if (!force) {
+                    const metadata = await getPenghuniSyncMetadata(db);
+                    if (
+                        cacheUsable &&
+                        !metadata.isDirty &&
+                        isFresh(metadata.lastSyncedAt)
+                    )
+                        return;
+                }
+                const status = await getConnectivityStatus();
+                if (!mountedRef.current || !focusedRef.current) return;
+                setConnectivity(status);
+                if (status === "offline") {
+                    if (!cacheUsable)
+                        setError(
+                            "Offline dan belum ada data PENGHUNI tersimpan di perangkat.",
+                        );
+                    else
+                        setNotice(
+                            showRefresh
+                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
+                                : "Offline. Menampilkan data PENGHUNI yang tersimpan di perangkat.",
+                        );
+                    return;
+                }
+                generationRef.current += 1;
+                loadingMoreRef.current = false;
+                requestedPageRef.current = null;
+                setLoadingMore(false);
+                setSyncing(true);
+                await synchronizePenghuniCache(db);
+                if (!mountedRef.current || !focusedRef.current) return;
+                setConnectivity("online");
+                setNotice(null);
+                await loadFirstPage(true);
+            } catch (syncError) {
+                if (!mountedRef.current || !focusedRef.current) return;
+                const status = getHttpStatus(syncError);
+                const message = getErrorMessage(
+                    syncError,
+                    "Sinkronisasi PENGHUNI gagal. Cache lama tetap digunakan.",
+                );
+                if (!cacheUsable || status === 401 || status === 403) setError(message);
+                else setNotice(message);
+            } finally {
+                if (mountedRef.current) {
+                    setSyncing(false);
+                    setRefreshing(false);
+                    setInitialLoading(false);
+                }
+            }
+        },
+        [db, loadFirstPage],
+    );
+
+    useFocusEffect(
+        useCallback(() => {
+            focusedRef.current = true;
+            void (async () => {
+                const snapshot = await hasPenghuniSnapshot(db);
+                if (snapshot) await loadFirstPage();
+                await syncAndReload(false, false, snapshot);
+            })().catch((focusError) => {
+                if (mountedRef.current) {
+                    setError(
+                        getErrorMessage(focusError, "Gagal menyiapkan cache PENGHUNI."),
+                    );
+                    setInitialLoading(false);
+                }
+            });
+            return () => {
+                focusedRef.current = false;
+                generationRef.current += 1;
+                loadingMoreRef.current = false;
+                requestedPageRef.current = null;
+            };
+        }, [db, loadFirstPage, syncAndReload]),
+    );
+    useEffect(() => {
+        if (focusedRef.current) void loadFirstPage();
+    }, [activeTab, debouncedSearch, loadFirstPage]);
+
+    const loadMore = useCallback(async () => {
+        if (
+            initialLoading ||
+            refreshing ||
+            syncing ||
+            loadingMoreRef.current ||
+            data.length === 0 ||
+            !meta ||
+            meta.current_page >= meta.last_page
+        )
+            return;
+        const nextPage = meta.current_page + 1;
+        if (requestedPageRef.current === nextPage) return;
+        const generation = generationRef.current;
+        loadingMoreRef.current = true;
+        requestedPageRef.current = nextPage;
+        setLoadingMore(true);
+        try {
+            const query = queryRef.current;
+            const response = await getLocalPenghuniPage(db, {
+                page: nextPage,
+                per_page: PAGE_SIZE,
+                search: query.search || undefined,
+                status: query.status,
+            });
+            if (!mountedRef.current || generation !== generationRef.current) return;
+            setData((current) => {
+                const ids = new Set(current.map((item) => item.id_sewa));
+                return [
+                    ...current,
+                    ...response.data.map(mapResponseToPenghuni).filter((item) => {
+                        if (ids.has(item.id_sewa)) return false;
+                        ids.add(item.id_sewa);
+                        return true;
+                    }),
+                ];
+            });
+            setMeta(response.meta);
+        } catch (loadError) {
+            requestedPageRef.current = null;
+            if (mountedRef.current && generation === generationRef.current)
+                setError(
+                    getErrorMessage(
+                        loadError,
+                        "Gagal memuat halaman cache PENGHUNI berikutnya.",
+                    ),
+                );
+        } finally {
+            if (mountedRef.current && generation === generationRef.current) {
+                loadingMoreRef.current = false;
+                setLoadingMore(false);
+            }
+        }
+    }, [data.length, db, initialLoading, meta, refreshing, syncing]);
+
+    const handleArchive = useCallback(
+        async (idSewa: number) => {
+            const status = await getConnectivityStatus();
+            setConnectivity(status);
+            if (status === "offline") {
+                Alert.alert(
+                    "Koneksi Diperlukan",
+                    "Tindakan ini membutuhkan koneksi internet.",
+                );
+                return;
+            }
+            Alert.alert(
+                "Konfirmasi",
+                "Apakah Anda yakin ingin mengarsipkan penghuni ini sebagai alumni?",
+                [
+                    { text: "Batal", style: "cancel" },
+                    {
+                        text: "Arsipkan",
+                        style: "destructive",
+                        onPress: async () => {
+                            try {
+                                const message = await finishAdminPenghuni(idSewa);
+                                try {
+                                    await Promise.all([
+                                        markPenghuniCacheDirty(db),
+                                        markKamarCacheDirty(db),
+                                    ]);
+                                    await synchronizePenghuniCache(db);
+                                    await loadFirstPage(true);
+                                    Alert.alert(
+                                        "Sukses",
+                                        message || "Penghuni berhasil diarsipkan.",
+                                    );
+                                } catch (cacheError) {
+                                    console.error(
+                                        "Failed to refresh PENGHUNI cache after finish:",
+                                        cacheError,
+                                    );
+                                    Alert.alert(
+                                        "Penghuni Diarsipkan",
+                                        "Perubahan tersimpan di server, tetapi cache lokal belum berhasil diperbarui.",
+                                    );
+                                }
+                            } catch (mutationError) {
+                                Alert.alert(
+                                    "Gagal",
+                                    getErrorMessage(
+                                        mutationError,
+                                        "Gagal mengarsipkan penghuni.",
+                                    ),
+                                );
+                            }
+                        },
+                    },
+                ],
+            );
+        },
+        [db, loadFirstPage],
+    );
 
     return {
         activeTab,
-        setActiveTab,
+        setActiveTab: setActiveTabState,
         searchQuery,
-        setSearchQuery,
+        setSearchQuery: (value: string) => setSearchQueryState(value.slice(0, 100)),
         filteredData: data,
-        isLoading,
+        meta,
+        isLoading: initialLoading,
+        initialLoading,
+        refreshing,
+        loadingMore,
+        syncing,
+        connectivity,
         error,
-        refetch: fetchData,
+        notice,
+        refetch: loadFirstPage,
+        onRefresh: () =>
+            void syncAndReload(true, true, data.length > 0 || Boolean(meta)),
+        loadMore,
+        retry: () =>
+            void syncAndReload(true, false, data.length > 0 || Boolean(meta)),
         handleArchive,
     };
 }

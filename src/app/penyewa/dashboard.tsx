@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
     ActivityIndicator,
     Pressable,
@@ -9,10 +9,12 @@ import {
     View,
 } from "react-native";
 
-import { getPenyewaDashboardSummary } from "@/api/dashboard";
 import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { syncPenyewaDashboard } from "@/database/dashboardSync";
+import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
 import type { PenyewaDashboardSummary } from "@/types";
+import { useSQLiteContext } from "expo-sqlite";
 
 const formatRupiah = (value: number | null) => {
     if (value === null || value === undefined) return "-";
@@ -40,37 +42,25 @@ export default function PenyewaDashboardScreen() {
 
 function PenyewaDashboardContent() {
     const router = useRouter();
+    const db = useSQLiteContext();
     const { user, logout } = useAuth();
-
-    const [summary, setSummary] = useState<PenyewaDashboardSummary | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [errorMessage, setErrorMessage] = useState("");
-
-    const fetchSummary = async (refresh = false) => {
-        try {
-            if (refresh) {
-                setIsRefreshing(true);
-            } else {
-                setIsLoading(true);
-            }
-
-            setErrorMessage("");
-
-            const data = await getPenyewaDashboardSummary();
-            setSummary(data);
-        } catch (error) {
-            console.log("PENYEWA DASHBOARD ERROR:", error);
-            setErrorMessage("Gagal memuat dashboard penyewa.");
-        } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchSummary();
-    }, []);
+    const userId = user?.id ?? null;
+    const scope = userId === null ? null : `penyewa:${userId}`;
+    const sync = useCallback(
+        (force = false) =>
+            userId === null
+                ? Promise.resolve()
+                : syncPenyewaDashboard(db, userId, force),
+        [db, userId],
+    );
+    const {
+        summary,
+        isLoading,
+        isRefreshing,
+        error: errorMessage,
+        notice,
+        refresh,
+    } = useDashboardSnapshot<PenyewaDashboardSummary>(scope, sync);
 
     const cards = useMemo(() => {
         if (!summary) return [];
@@ -109,7 +99,7 @@ function PenyewaDashboardContent() {
         router.replace("/login");
     };
 
-    if (isLoading) {
+    if (isLoading && !summary) {
         return (
             <View className="flex-1 items-center justify-center bg-light">
                 <ActivityIndicator size="large" color="#2563eb" />
@@ -127,7 +117,7 @@ function PenyewaDashboardContent() {
             refreshControl={
                 <RefreshControl
                     refreshing={isRefreshing}
-                    onRefresh={() => fetchSummary(true)}
+                    onRefresh={refresh}
                 />
             }
         >
@@ -149,6 +139,11 @@ function PenyewaDashboardContent() {
             {errorMessage ? (
                 <View className="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-4">
                     <Text className="text-sm font-bold text-danger">{errorMessage}</Text>
+                </View>
+            ) : null}
+            {notice ? (
+                <View className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4">
+                    <Text className="text-sm font-bold text-primary">{notice}</Text>
                 </View>
             ) : null}
 
