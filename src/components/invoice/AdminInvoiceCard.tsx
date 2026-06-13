@@ -1,9 +1,9 @@
+import { InvoiceListItemResponse } from "@/types/invoice";
 import React from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import type { InvoiceItem } from "@/api/invoice";
 
 export type AdminInvoiceCardProps = {
-    invoice: InvoiceItem;
+    invoice: InvoiceListItemResponse;
     isDownloading: boolean;
     onDownload: () => void;
 };

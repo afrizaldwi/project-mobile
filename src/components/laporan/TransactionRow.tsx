@@ -1,9 +1,9 @@
+import { InvoiceListItemResponse } from "@/types/invoice";
 import React from "react";
 import { View, Text } from "react-native";
-import type { InvoiceItem } from "@/api/invoice";
 
 export type TransactionRowProps = {
-    invoice: InvoiceItem;
+    invoice: InvoiceListItemResponse;
 };
 
 const formatRupiah = (value: string | number | null | undefined) =>

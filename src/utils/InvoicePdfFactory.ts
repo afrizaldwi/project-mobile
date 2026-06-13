@@ -1,23 +1,27 @@
-import type { InvoiceItem } from "@/api/invoice";
+import { InvoiceListItemResponse } from "@/types/invoice";
 
 export class InvoicePdfFactory {
-    static generateHtml(invoice: InvoiceItem): string {
-        const formatDate = (dateString?: string) => {
-            if (!dateString) return "-";
-            const date = new Date(dateString);
-            return date.toLocaleDateString("id-ID", {
-                day: "numeric",
-                month: "long",
-                year: "numeric"
-            });
-        };
+  static generateHtml(invoice: InvoiceListItemResponse): string {
+    const formatDate = (dateString?: string) => {
+      if (!dateString) return "-";
+      const date = new Date(dateString);
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    };
 
-        const formatRupiah = (amount?: number) => {
-            if (amount === undefined) return "Rp 0";
-            return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
-        };
+    const formatRupiah = (amount?: number) => {
+      if (amount === undefined) return "Rp 0";
+      return new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+      }).format(amount);
+    };
 
-        return `
+    return `
             <!DOCTYPE html>
             <html lang="id">
             <head>
@@ -147,5 +151,5 @@ export class InvoicePdfFactory {
             </body>
             </html>
         `;
-    }
+  }
 }
