@@ -1,6 +1,6 @@
 import { readDashboardSnapshot } from "@/database/dashboardRepository";
 import { getConnectivityStatus } from "@/network/connectivity";
-import type { AdminDashboardSummary, PenyewaDashboardSummary } from "@/types";
+import type { AdminDashboardSummary, PenyewaDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
 

@@ -1,19 +1,28 @@
-import type {
-  AdminDashboardSummary,
-  DashboardKeluhanStatus,
-  PenyewaDashboardSummary,
-} from "@/types";
+import {
+  DASHBOARD_KAMAR_STATUSES,
+  DASHBOARD_KELUHAN_STATUSES,
+  DASHBOARD_TAGIHAN_STATUSES,
+  type AdminDashboardSummary,
+  type DashboardKamarStatus,
+  type DashboardKeluhanStatus,
+  type DashboardTagihanStatus,
+  type PenyewaDashboardSummary,
+} from "@/types/dashboard";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 type MetadataRow = { last_synced_at: string; is_dirty: number };
 type PayloadRow = { payload_json: string };
 type DashboardSummary = AdminDashboardSummary | PenyewaDashboardSummary;
 
-const statuses = new Set<DashboardKeluhanStatus>([
-  "pending",
-  "proses",
-  "selesai",
-]);
+const complaintStatuses = new Set<DashboardKeluhanStatus>(
+  DASHBOARD_KELUHAN_STATUSES,
+);
+const roomStatuses = new Set<DashboardKamarStatus>(
+  DASHBOARD_KAMAR_STATUSES,
+);
+const invoiceStatuses = new Set<DashboardTagihanStatus>(
+  DASHBOARD_TAGIHAN_STATUSES,
+);
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown) => typeof value === "string";
@@ -33,13 +42,23 @@ const money = (value: unknown): number | null => {
   return null;
 };
 const nullableText = (value: unknown) => value === null || text(value);
+const roomStatus = (value: unknown): value is DashboardKamarStatus =>
+  typeof value === "string" &&
+  roomStatuses.has(value as DashboardKamarStatus);
+const invoiceStatus = (value: unknown): value is DashboardTagihanStatus =>
+  typeof value === "string" &&
+  invoiceStatuses.has(value as DashboardTagihanStatus);
+const paymentStatus = (
+  value: unknown,
+): value is DashboardTagihanStatus | "-" =>
+  value === "-" || invoiceStatus(value);
 const complaints = (value: unknown) =>
   Array.isArray(value) &&
   value.every(
     (item) =>
       object(item) &&
       nonEmpty(item.judul) &&
-      statuses.has(item.status as DashboardKeluhanStatus) &&
+      complaintStatuses.has(item.status as DashboardKeluhanStatus) &&
       text(item.tanggal),
   );
 
@@ -84,7 +103,7 @@ export function normalizePenyewaDashboard(
   if (
     !text(cards.kamar_saya) ||
     !count(cards.tagihan_aktif) ||
-    !text(cards.status_pembayaran) ||
+    !paymentStatus(cards.status_pembayaran) ||
     !text(cards.sisa_masa_sewa) ||
     !count(cards.keluhan_saya) ||
     !complaints(value.keluhan_terakhir)
@@ -97,7 +116,10 @@ export function normalizePenyewaDashboard(
       !object(value.kamar) ||
       !nullableText(value.kamar.nomor_kamar) ||
       !nullableText(value.kamar.fasilitas) ||
-      !nullableText(value.kamar.status_kamar)
+      !(
+        value.kamar.status_kamar === null ||
+        roomStatus(value.kamar.status_kamar)
+      )
     )
       throw new Error("Snapshot kamar dashboard penyewa tidak valid.");
     const harga =
@@ -118,7 +140,7 @@ export function normalizePenyewaDashboard(
       !object(value.tagihan_terbaru) ||
       !nonEmpty(value.tagihan_terbaru.kode_invoice) ||
       !text(value.tagihan_terbaru.tanggal_jatuh_tempo) ||
-      !text(value.tagihan_terbaru.status_tagihan)
+      !invoiceStatus(value.tagihan_terbaru.status_tagihan)
     )
       throw new Error("Snapshot tagihan dashboard penyewa tidak valid.");
     const total = money(value.tagihan_terbaru.total_tagihan);
@@ -141,7 +163,7 @@ export function normalizePenyewaDashboard(
       ) ||
       !Number.isInteger(value.kontrak.durasi_sewa_bulan) ||
       (value.kontrak.durasi_sewa_bulan as number) <= 0 ||
-      !text(value.kontrak.status_sewa) ||
+      value.kontrak.status_sewa !== "aktif" ||
       !count(value.kontrak.progress_persen) ||
       !text(value.kontrak.sisa_masa_sewa)
     )
