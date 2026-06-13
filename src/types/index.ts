@@ -1,26 +1,10 @@
-export type UserRole = "admin" | "penyewa";
-
-export type User = {
-    id: number;
-    nama_lengkap: string;
-    email: string;
-    role: UserRole;
-    noHp?: string;
-    no_hp?: string | null;
-    fotoProfil?: string | null;
-    foto_profil?: string | null;
-    alamatAsal?: string | null;
-    alamat_asal?: string | null;
-    createdAt?: string;
-    created_at?: string | null;
-    updatedAt?: string;
-    updated_at?: string | null;
-};
-
-export type LoginPayload = {
-    email: string;
-    password: string;
-};
+export type {
+    LoginPayload,
+    LoginResponse,
+    LoginUserResponse,
+    User,
+    UserRole,
+} from "@/types/auth";
 
 export interface Invoice {
     id: string;
@@ -63,14 +47,6 @@ export interface Transaksi {
     status: 'sukses' | 'gagal' | 'pending';
 }
 
-export type LoginResponse = {
-    message: string;
-    token?: string;
-    access_token?: string;
-    token_type?: string;
-    expires_in?: number;
-    user: User;
-};
 
 export type Keluhan = {
     id_keluhan: number;
@@ -170,7 +146,6 @@ export type {
     PasswordChangePayload,
     PasswordChangeResponse,
     ProfileKamar,
-    ProfileRole,
     ProfileResponse,
     ProfileSewa,
     ProfileUser,

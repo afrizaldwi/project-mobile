@@ -8,7 +8,12 @@ import {
   publishProfileSnapshot,
 } from "@/database/profileRepository";
 import type { UserRole } from "@/types";
-import type { ProfileResponse, ProfileUser } from "@/types/profile";
+import {
+  normalizeNullableProfileKamarStatus,
+  normalizeNullableProfileSewaStatus,
+  type ProfileResponse,
+  type ProfileUser,
+} from "@/types/profile";
 import {
   getSafeErrorMessage,
   isRecoverableApiAvailabilityError,
@@ -98,7 +103,7 @@ function normalizeProfileResponse(
   const alamatAsal = normalizeOptionalString(user.alamat_asal, "alamat_asal");
   const createdAt = normalizeOptionalString(user.created_at, "created_at");
   const updatedAt = normalizeOptionalString(user.updated_at, "updated_at");
-  const topLevelStatusSewa = normalizeOptionalString(
+  const topLevelStatusSewa = normalizeNullableProfileSewaStatus(
     user.status_sewa,
     "status_sewa",
   );
@@ -114,7 +119,7 @@ function normalizeProfileResponse(
     sewa?.tanggal_keluar,
     "sewa.tanggal_keluar",
   );
-  const nestedStatusSewa = normalizeOptionalString(
+  const nestedStatusSewa = normalizeNullableProfileSewaStatus(
     sewa?.status_sewa,
     "sewa.status_sewa",
   );
@@ -123,7 +128,7 @@ function normalizeProfileResponse(
     kamar?.nomor_kamar,
     "kamar.nomor_kamar",
   );
-  const statusKamar = normalizeOptionalString(
+  const statusKamar = normalizeNullableProfileKamarStatus(
     kamar?.status_kamar,
     "kamar.status_kamar",
   );

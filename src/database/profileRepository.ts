@@ -1,6 +1,10 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import type { ProfileUser } from "@/types/profile";
+import {
+    normalizeNullableProfileKamarStatus,
+    normalizeNullableProfileSewaStatus,
+    type ProfileUser,
+} from "@/types/profile";
 import type { UserRole } from "@/types";
 
 type MetadataRow = { last_synced_at: string; is_dirty: number };
@@ -46,12 +50,18 @@ function mapRowToProfile(row: ProfileRow): ProfileUser {
         alamat_asal: row.alamat_asal,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        status_sewa: row.status_sewa,
+        status_sewa: normalizeNullableProfileSewaStatus(
+            row.status_sewa,
+            "cache.status_sewa",
+        ),
         kamar:
             row.nomor_kamar !== null || row.status_kamar !== null
                 ? {
                       nomor_kamar: row.nomor_kamar,
-                      status_kamar: row.status_kamar,
+                      status_kamar: normalizeNullableProfileKamarStatus(
+                          row.status_kamar,
+                          "cache.kamar.status_kamar",
+                      ),
                   }
                 : null,
         sewa:
@@ -61,7 +71,10 @@ function mapRowToProfile(row: ProfileRow): ProfileUser {
                 ? {
                       tanggal_masuk: row.tanggal_masuk,
                       tanggal_keluar: row.tanggal_keluar,
-                      status_sewa: row.status_sewa,
+                      status_sewa: normalizeNullableProfileSewaStatus(
+                          row.status_sewa,
+                          "cache.sewa.status_sewa",
+                      ),
                   }
                 : null,
     };
