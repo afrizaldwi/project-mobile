@@ -1,13 +1,10 @@
 import type { PaginationMeta } from "@/types/pagination";
+import type { Tamu } from "@/types";
 
-export interface AdminTamuItem {
-    id_tamu: number;
-    nama_tamu: string;
-    no_hp_tamu: string;
-    keperluan: string;
-    waktu_berkunjung: string;
+export interface PenghuniAktif {
     id_user: number;
     nama_penghuni: string;
+    email: string;
     nomor_kamar: string;
 }
 
@@ -29,12 +26,12 @@ export interface AdminTamuSummary {
 }
 
 export interface AdminTamuListResponse {
-    data: AdminTamuItem[];
+    data: Tamu[];
     meta: PaginationMeta;
     summary: AdminTamuSummary;
 }
 
 export interface PenyewaTamuListResponse {
     status: "success";
-    data: AdminTamuItem[];
+    data: Tamu[];
 }

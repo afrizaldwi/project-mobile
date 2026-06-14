@@ -1,7 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
-import { PenghuniAktif } from "@/api/tamuService";
+import type { PenghuniAktif } from "@/types/tamu";
 
 import { FormTextField } from "./FormTextField";
 import { PenghuniSelectField } from "./PenghuniSelectField";
