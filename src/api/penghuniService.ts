@@ -38,4 +38,3 @@ export function createPenghuniService(client: AxiosInstance = apiClient) {
 }
 
 export const penghuniService = createPenghuniService();
-
