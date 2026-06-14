@@ -13,7 +13,7 @@ import {
 } from "react-native";
 
 import { invoiceApi } from "@/api/invoice";
-import type { NotifikasiItem, TagihanReminderItem } from "@/api/tagihanApi";
+import type { NotifikasiItem, TagihanReminderItem } from "@/types/tagihan";
 import { tagihanApi } from "@/api/tagihanApi";
 import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -30,6 +30,7 @@ import {
   imageAssetToUploadFile,
   type UploadFilePayload,
 } from "@/utils/uploadFile";
+import { isPaidOrVerified } from "@/utils/tagihanHelpers";
 
 import { ActiveTagihanCard } from "@/components/tagihan/penyewa/ActiveTagihanCard";
 import { PaymentUploadModal } from "@/components/tagihan/penyewa/PaymentUploadModal";
@@ -55,20 +56,13 @@ export default function PenyewaTagihanScreen() {
     number | null
   >(null);
 
-  const isPaidOrVerified = useCallback(
-    (item: TagihanReminderItem) =>
-      item.status_tagihan === "lunas" ||
-      item.pembayaran_terbaru?.status_verifikasi === "diterima",
-    [],
-  );
-
   const activeTagihan = useMemo(
     () => tagihan.filter((item) => !isPaidOrVerified(item)),
-    [tagihan, isPaidOrVerified],
+    [tagihan],
   );
   const riwayat = useMemo(
     () => tagihan.filter((item) => isPaidOrVerified(item)),
-    [tagihan, isPaidOrVerified],
+    [tagihan],
   );
 
   const loadTagihan = useCallback(

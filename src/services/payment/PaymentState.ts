@@ -1,4 +1,4 @@
-import { TagihanReminderItem } from "@/api/tagihanApi";
+import type { TagihanReminderItem } from "@/types/tagihan";
 
 export interface PaymentState {
   getStatusLabel(isAdmin?: boolean): string;

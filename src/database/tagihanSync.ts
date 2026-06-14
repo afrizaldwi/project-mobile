@@ -1,8 +1,8 @@
-import {
-  tagihanApi,
-  type PendingPembayaranItem,
-  type TagihanReminderItem,
-} from "@/api/tagihanApi";
+import { tagihanApi } from "@/api/tagihanApi";
+import type {
+  PendingPembayaranItem,
+  TagihanReminderItem,
+} from "@/types/tagihan";
 import {
   ADMIN_PENDING_SCOPE,
   ADMIN_TAGIHAN_SCOPE,
