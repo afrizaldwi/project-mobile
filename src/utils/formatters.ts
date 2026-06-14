@@ -8,7 +8,7 @@ export const formatRupiah = (value: string | number) => {
 
 export const formatDate = (value: string | null | undefined, formatOptions?: Intl.DateTimeFormatOptions) => {
   if (!value) return "-";
-  
+
   const defaultOptions: Intl.DateTimeFormatOptions = {
     day: "numeric",
     month: "short",

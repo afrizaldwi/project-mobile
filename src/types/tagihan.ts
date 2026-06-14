@@ -29,8 +29,8 @@ export interface TagihanReminderItem {
   kode_invoice: string;
   tanggal_tagihan: string;
   tanggal_jatuh_tempo: string;
-  total_tagihan: string | number;
-  status_tagihan: "belum_bayar" | "pending" | "telat" | "lunas" | "dibatalkan" | string;
+  total_tagihan: string;
+  status_tagihan: "belum_bayar" | "pending" | "telat" | "lunas" | "dibatalkan";
   pembayaran_terbaru?: PembayaranTerbaru | null;
   penyewa: {
     id: number | null;
@@ -60,7 +60,7 @@ export interface TagihanReminderItem {
 export interface PembayaranTerbaru {
   id_pembayaran: number;
   tanggal_bayar: string;
-  jumlah_bayar: string | number;
+  jumlah_bayar: string;
   metode_pembayaran: string;
   bukti_bayar: string | null;
   bukti_bayar_url: string | null;
@@ -72,7 +72,7 @@ export interface PendingPembayaranItem {
   id_pembayaran: number;
   id_tagihan: number;
   tanggal_bayar: string;
-  jumlah_bayar: string | number;
+  jumlah_bayar: string;
   metode_pembayaran: string;
   bukti_bayar: string | null;
   bukti_bayar_url: string | null;
