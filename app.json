@@ -34,7 +34,7 @@
      [
         "expo-splash-screen",
         {
-          "image": "./assets/images/basecamp-splash.png", 
+          "image": "./assets/images/basecamp-splash.png",
           "imageWidth": 280,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
