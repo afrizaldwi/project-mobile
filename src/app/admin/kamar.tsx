@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { deleteKamar } from "@/api/kamarService";
+import { getErrorMessage } from "@/utils/apiErrors";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
   DeleteModal,
@@ -22,19 +23,9 @@ import {
 } from "@/components/kamar";
 import { useKamarLocalList } from "@/hooks/useKamarLocalList";
 import type { Kamar } from "@/types/kamar";
+import { requireOnlineAction } from "@/utils/offlineUi";
 
 type ViewStrategy = "grid" | "list";
-function getErrorMessage(
-  error: unknown,
-  fallback = "Gagal memuat data kamar.",
-): string {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-      ?.message ||
-    (error instanceof Error ? error.message : null) ||
-    fallback
-  );
-}
 
 export default function AdminKamarScreen() {
   const [searchInput, setSearchInput] = useState("");
@@ -83,8 +74,27 @@ export default function AdminKamarScreen() {
           new Date(lastSyncedAt).toLocaleString("id-ID")
         : null));
 
+  const handleTambah = async () => {
+    if (!(await requireOnlineAction())) return;
+    router.push("/admin/kamar-tambah");
+  };
+
+  const handleEdit = async (kamar: Kamar) => {
+    if (!(await requireOnlineAction())) return;
+    router.push({
+      pathname: "/admin/kamar-edit",
+      params: { id: kamar.id_kamar },
+    });
+  };
+
+  const handleOpenHapus = async (kamar: Kamar) => {
+    if (!(await requireOnlineAction())) return;
+    setHapusModal({ visible: true, kamar });
+  };
+
   const handleHapus = async () => {
     if (!hapusModal.kamar) return;
+    if (!(await requireOnlineAction())) return;
 
     try {
       setHapusLoading(true);
@@ -110,12 +120,8 @@ export default function AdminKamarScreen() {
   };
 
   const renderRoom = ({ item }: { item: Kamar }) => {
-    const onEdit = () =>
-      router.push({
-        pathname: "/admin/kamar-edit",
-        params: { id: item.id_kamar },
-      });
-    const onHapus = () => setHapusModal({ visible: true, kamar: item });
+    const onEdit = () => void handleEdit(item);
+    const onHapus = () => void handleOpenHapus(item);
 
     return viewStrategy === "grid" ? (
       <KamarGridCard kamar={item} onEdit={onEdit} onHapus={onHapus} />
@@ -132,8 +138,8 @@ export default function AdminKamarScreen() {
           <Text className="text-xs text-gray-500">Kelola data kamar</Text>
         </View>
         <Pressable
-          onPress={() => router.push("/admin/kamar-tambah")}
-          className="rounded-xl bg-primary px-4 py-2.5 active:opacity-80"
+          onPress={() => void handleTambah()}
+          className={`rounded-xl bg-primary px-4 py-2.5 active:opacity-80 ${connectivity === "offline" ? "opacity-40" : ""}`}
         >
           <Text className="text-sm font-bold text-white">+ Tambah</Text>
         </Pressable>

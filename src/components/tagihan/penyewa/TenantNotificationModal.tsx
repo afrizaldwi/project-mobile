@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { NotifikasiItem } from "@/api/tagihanApi";
+import type { NotifikasiItem } from "@/types/tagihan";
 
 interface TenantNotificationModalProps {
   visible: boolean;

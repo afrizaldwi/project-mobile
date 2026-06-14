@@ -1,6 +1,8 @@
 import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
-import { TagihanReminderItem } from "@/api/tagihanApi";
+import type { TagihanReminderItem } from "@/types/tagihan";
+import { isPaidOrVerified } from "@/utils/tagihanHelpers";
+import { formatRupiah, formatDate } from "@/utils/formatters";
 
 interface RiwayatPembayaranListProps {
   riwayat: TagihanReminderItem[];
@@ -8,27 +10,12 @@ interface RiwayatPembayaranListProps {
   onDownloadInvoice?: (item: TagihanReminderItem) => void;
 }
 
-const formatRupiah = (value: string | number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-};
 
-const formatDate = (value: string) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-};
 
 const canDownloadInvoice = (item: TagihanReminderItem) => {
   return (
     item.status_tagihan !== "dibatalkan" &&
-    (item.status_tagihan === "lunas" || item.pembayaran_terbaru?.status_verifikasi === "diterima") &&
+    isPaidOrVerified(item) &&
     Boolean(item.pembayaran_terbaru?.id_pembayaran)
   );
 };
@@ -70,7 +57,7 @@ export const RiwayatPembayaranList: React.FC<RiwayatPembayaranListProps> = ({
                 <View>
                   <Text style={{ fontWeight: "900", color: "#1a1a1a", fontSize: 13 }}>{item.kode_invoice}</Text>
                   <Text style={{ fontSize: 11, color: "#888" }}>Kamar {item.kamar.nomor_kamar}</Text>
-                  <Text style={{ fontSize: 11, color: "#888" }}>{formatDate(item.tanggal_jatuh_tempo)}</Text>
+                  <Text style={{ fontSize: 11, color: "#888" }}>{formatDate(item.tanggal_jatuh_tempo, { day: "numeric", month: "long", year: "numeric" })}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={{ fontWeight: "900", color: "#1a1a1a", fontSize: 13 }}>

@@ -1,6 +1,6 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { PendingPembayaranItem } from "@/api/tagihanApi";
+import type { PendingPembayaranItem } from "@/types/tagihan";
 
 interface PendingPaymentsListProps {
   pendingPayments: PendingPembayaranItem[];

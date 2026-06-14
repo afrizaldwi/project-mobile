@@ -22,8 +22,6 @@ export default function AdminKeluhanScreen() {
         retry,
         handleDelete,
         handleUpdateStatus,
-        handleExport,
-        exporting,
     } = useAdminKeluhans();
 
     return (

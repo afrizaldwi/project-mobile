@@ -1,6 +1,6 @@
 import { readDashboardSnapshot } from "@/database/dashboardRepository";
 import { getConnectivityStatus } from "@/network/connectivity";
-import type { AdminDashboardSummary, PenyewaDashboardSummary } from "@/types";
+import type { AdminDashboardSummary, PenyewaDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -50,7 +50,7 @@ export function useDashboardSnapshot<T extends DashboardSummary>(
             if (await getConnectivityStatus() === "offline") {
                 if (usable) {
                     setError("");
-                    setNotice("Offline. Menampilkan dashboard yang tersimpan di perangkat.");
+                    setNotice("");
                 } else {
                     setNotice("");
                     setError(

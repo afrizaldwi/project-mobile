@@ -1,29 +1,15 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { TagihanReminderItem } from "@/api/tagihanApi";
+import type { TagihanReminderItem } from "@/types/tagihan";
 import { PaymentStateContext } from "@/services/payment/PaymentState";
+import { formatRupiah, formatDate } from "@/utils/formatters";
 
 interface ActiveTagihanCardProps {
   item: TagihanReminderItem;
   onPay: (item: TagihanReminderItem) => void;
 }
 
-const formatRupiah = (value: string | number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-};
 
-const formatDate = (value: string) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-};
 
 const getStatusConfig = (item: TagihanReminderItem) => {
   const state = PaymentStateContext.getState(item);
@@ -134,7 +120,7 @@ export const ActiveTagihanCard: React.FC<ActiveTagihanCardProps> = ({ item, onPa
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: "#888", fontWeight: "700" }}>JATUH TEMPO</Text>
           <Text style={{ fontSize: 13, fontWeight: "800", color: "#1a1a1a", marginTop: 2 }}>
-            {formatDate(item.tanggal_jatuh_tempo)}
+            {formatDate(item.tanggal_jatuh_tempo, { day: "numeric", month: "long", year: "numeric" })}
           </Text>
         </View>
       </View>

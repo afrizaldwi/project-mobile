@@ -23,7 +23,6 @@ interface KeluhanCardProps {
 }
 
 export function KeluhanCard({ keluhan, isAdmin = false, onDelete, onUpdateStatus }: KeluhanCardProps) {
-    const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isViewerVisible, setIsViewerVisible] = useState(false);
     const [viewerStartIndex, setViewerStartIndex] = useState(0);
     const [modalActiveIndex, setModalActiveIndex] = useState(0);

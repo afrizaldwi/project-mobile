@@ -1,9 +1,9 @@
+import type { AdminTagihanStatus } from "@/api/tagihanApi";
 import type {
-  AdminTagihanStatus,
   AdminTagihanSummary,
   PendingPembayaranItem,
   TagihanReminderItem,
-} from "@/api/tagihanApi";
+} from "@/types/tagihan";
 import {
   ADMIN_PENDING_SCOPE,
   ADMIN_TAGIHAN_SCOPE,
@@ -51,9 +51,9 @@ function useLocal<T>(
     more = useRef(false);
   useEffect(() => {
     mounted.current = true;
+
     return () => {
       mounted.current = false;
-      gen.current++;
     };
   }, []);
   const load = useCallback(
@@ -95,9 +95,7 @@ function useLocal<T>(
         }
         if ((await getConnectivityStatus()) === "offline") {
           if (usable)
-            setNotice(
-              "Offline. Menampilkan data TAGIHAN yang tersimpan di perangkat.",
-            );
+            setNotice(null);
           else
             setError(
               "Offline dan belum ada data TAGIHAN tersimpan di perangkat.",

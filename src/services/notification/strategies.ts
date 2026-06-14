@@ -1,21 +1,32 @@
+import type { NotifikasiItem } from "@/types/tagihan";
+
 export interface NotificationStrategy {
-  send(notif: any): Promise<void>;
+  send(notification: NotifikasiItem): Promise<void>;
 }
 
 export class PushNotificationStrategy implements NotificationStrategy {
-  async send(notif: any) {
+  async send(notification: NotifikasiItem): Promise<void> {
     try {
       const Notifications = await import("expo-notifications");
+
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: notif.judul || "Notifikasi Tagihan",
-          body: notif.pesan || "Ada informasi tagihan yang perlu diperiksa.",
-          data: { notificationId: notif.id, tagihanId: notif.id_tagihan },
+          title: notification.judul || "Notifikasi Tagihan",
+          body:
+            notification.pesan ||
+            "Ada informasi tagihan yang perlu diperiksa.",
+          data: {
+            notificationId: notification.id,
+            tagihanId: notification.id_tagihan,
+          },
         },
         trigger: null,
       });
     } catch (error) {
-      console.warn("[PushNotificationStrategy] Gagal menampilkan notifikasi:", error);
+      console.warn(
+        "[PushNotificationStrategy] Gagal menampilkan notifikasi:",
+        error,
+      );
     }
   }
 }

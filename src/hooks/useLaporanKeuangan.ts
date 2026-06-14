@@ -1,4 +1,5 @@
-import { laporanService, type LaporanKeuanganResponse } from "@/api/laporanService";
+import { laporanService } from "@/api/laporanService";
+import type { LaporanKeuanganResponse, PengeluaranFormState } from "@/types/laporan";
 import {
     markLaporanKeuanganDirty,
     readLaporanKeuanganSnapshot,
@@ -6,19 +7,24 @@ import {
 } from "@/database/laporanKeuanganRepository";
 import { syncLaporanKeuangan } from "@/database/laporanKeuanganSync";
 import { getConnectivityStatus } from "@/network/connectivity";
+import { getApiErrorMessage, getFirstValidationError } from "@/utils/errorUtils";
+import { formatCurrency, formatLocalDate } from "@/utils/formatUtils";
+import { useOfflineGuard } from "@/hooks/useOfflineGuard";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert } from "react-native";
+
+// ─── Konstanta ─────────────────────────────────────────────────────────────────
 
 const initialDate = new Date();
 const currentYear = initialDate.getFullYear();
-const periodKey = (bulan: number, tahun: number) =>
-    `${tahun}-${String(bulan).padStart(2, "0")}`;
-const formatLocalDate = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-        date.getDate(),
-    ).padStart(2, "0")}`;
-const parseExpensePeriod = (value: string) => {
+
+// ─── Helper functions ──────────────────────────────────────────────────────────
+
+function periodKey(bulan: number, tahun: number): string {
+    return `${tahun}-${String(bulan).padStart(2, "0")}`;
+}
+
+function parseExpensePeriod(value: string): { bulan: number; tahun: number } | null {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
     if (!match) return null;
     const tahun = Number(match[1]);
@@ -29,13 +35,42 @@ const parseExpensePeriod = (value: string) => {
     } catch {
         return null;
     }
+}
+
+/** Validasi form pengeluaran. Mengembalikan pesan error atau null jika valid. */
+function validateExpenseForm(form: PengeluaranFormState): string | null {
+    if (!form.judul_pengeluaran.trim()) return "Keterangan wajib diisi.";
+    const jumlah = Number(form.jumlah_pengeluaran);
+    if (!form.jumlah_pengeluaran.trim() || isNaN(jumlah) || jumlah <= 0)
+        return "Jumlah pengeluaran harus berupa angka positif.";
+    if (!parseExpensePeriod(form.tanggal_pengeluaran))
+        return "Tanggal wajib diisi dengan format YYYY-MM-DD.";
+    return null;
+}
+
+// ─── State untuk konfirmasi hapus pengeluaran (poin 8) ────────────────────────
+
+export interface DeletePengeluaranConfirmState {
+    visible: boolean;
+    idPengeluaran: number | null;
+    judulPengeluaran: string;
+    jumlahPengeluaran: number;
+    tanggalPengeluaran: string;
+}
+
+const INITIAL_DELETE_STATE: DeletePengeluaranConfirmState = {
+    visible: false,
+    idPengeluaran: null,
+    judulPengeluaran: "",
+    jumlahPengeluaran: 0,
+    tanggalPengeluaran: "",
 };
-const getErrorMessage = (error: unknown, fallback: string) =>
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message || fallback;
+
+// ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useLaporanKeuangan() {
     const db = useSQLiteContext();
+    const isOffline = useOfflineGuard();
     const [bulan, setBulan] = useState(initialDate.getMonth() + 1);
     const [tahun, setTahun] = useState(currentYear);
     const [data, setData] = useState<LaporanKeuanganResponse | null>(null);
@@ -43,10 +78,16 @@ export function useLaporanKeuangan() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [showExpenseForm, setShowExpenseForm] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [notice, setNotice] = useState("");
     const generation = useRef(0);
+
+    /** State untuk modal konfirmasi sebelum hapus pengeluaran (poin 8) */
+    const [deleteConfirm, setDeleteConfirm] =
+        useState<DeletePengeluaranConfirmState>(INITIAL_DELETE_STATE);
+
     const selectedKey = periodKey(bulan, tahun);
     const visibleData = dataPeriod === selectedKey ? data : null;
 
@@ -71,12 +112,15 @@ export function useLaporanKeuangan() {
         ],
         [],
     );
-    const [form, setForm] = useState({
+
+    const [form, setForm] = useState<PengeluaranFormState>({
         judul_pengeluaran: "",
         deskripsi: "",
         jumlah_pengeluaran: "",
         tanggal_pengeluaran: formatLocalDate(initialDate),
     });
+
+    // ─── Load dari cache lokal ─────────────────────────────────────────────────
 
     const loadLocal = useCallback(
         async (targetBulan: number, targetTahun: number, token: number) => {
@@ -103,6 +147,8 @@ export function useLaporanKeuangan() {
         [db],
     );
 
+    // ─── Sinkronisasi dan reload ───────────────────────────────────────────────
+
     const synchronizeAndReload = useCallback(
         async (
             targetBulan: number,
@@ -113,19 +159,22 @@ export function useLaporanKeuangan() {
         ) => {
             if (showRefresh && generation.current === token) setIsRefreshing(true);
             try {
-                if ((await getConnectivityStatus()) === "offline") {
+                const connectivity = await getConnectivityStatus();
+                // Treat 'unknown' sebagai online agar sync tetap dicoba
+                if (connectivity === "offline") {
                     if (generation.current !== token) return;
                     if (usable) {
                         setErrorMessage("");
-                        setNotice(
-                            "Offline. Menampilkan laporan keuangan yang tersimpan di perangkat.",
-                        );
+                        setNotice("");
                     } else {
                         setNotice("");
                         setErrorMessage(
                             "Laporan keuangan tersimpan tidak valid dan tidak dapat diperbarui saat offline.",
                         );
                     }
+                    // Pastikan loading state selalu diselesaikan saat offline
+                    setIsLoading(false);
+                    setIsRefreshing(false);
                     return;
                 }
                 await syncLaporanKeuangan(db, targetBulan, targetTahun, showRefresh);
@@ -195,41 +244,56 @@ export function useLaporanKeuangan() {
 
     const refreshAfterMutation = useCallback(
         async (targetBulan: number, targetTahun: number) => {
+            // Tangkap token sebelum operasi async dimulai untuk cegah race condition
             const token = generation.current;
             await markLaporanKeuanganDirty(db, targetBulan, targetTahun);
             if (targetBulan !== bulan || targetTahun !== tahun) return;
-            await syncLaporanKeuangan(db, targetBulan, targetTahun, true);
+
+            // Delay singkat agar server punya waktu memproses data baru sebelum di-fetch ulang
+            await new Promise((resolve) => setTimeout(resolve, 400));
+
+            // Coba sinkronisasi pertama kali
+            try {
+                await syncLaporanKeuangan(db, targetBulan, targetTahun, true);
+            } catch {
+                // Jika gagal, tunggu sebentar lalu coba sekali lagi (retry)
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                try {
+                    await syncLaporanKeuangan(db, targetBulan, targetTahun, true);
+                } catch {
+                    // Kedua sync gagal — tetap lanjut dan coba tampilkan cache lama
+                    if (__DEV__)
+                        console.warn("[LAPORAN] refreshAfterMutation: kedua sync gagal, fallback ke cache lokal.");
+                }
+            }
+
+            // Pastikan generasi belum berubah sebelum update state
             if (generation.current !== token) return;
-            if (!(await loadLocal(targetBulan, targetTahun, token)))
-                throw new Error("Cache laporan keuangan gagal dimuat ulang.");
-            setNotice("");
-            setErrorMessage("");
+
+            const loaded = await loadLocal(targetBulan, targetTahun, token);
+            if (!loaded) throw new Error("Cache laporan keuangan gagal dimuat ulang setelah mutasi.");
+
+            if (generation.current === token) {
+                setNotice("");
+                setErrorMessage("");
+            }
         },
         [bulan, db, loadLocal, tahun],
     );
 
+    // ─── Submit pengeluaran baru ───────────────────────────────────────────────
+
     const handleSubmitExpense = async () => {
-        if (!form.judul_pengeluaran.trim()) {
-            Alert.alert("Error", "Keterangan wajib diisi.");
-            return;
-        }
-        if (
-            !form.jumlah_pengeluaran.trim() ||
-            isNaN(Number(form.jumlah_pengeluaran)) ||
-            Number(form.jumlah_pengeluaran) <= 0
-        ) {
-            Alert.alert("Error", "Jumlah pengeluaran harus berupa angka positif.");
-            return;
-        }
-        const affected = parseExpensePeriod(form.tanggal_pengeluaran);
-        if (!affected) {
-            Alert.alert("Error", "Tanggal wajib diisi.");
+        const validationError = validateExpenseForm(form);
+        if (validationError) {
+            setErrorMessage(validationError);
             return;
         }
         if ((await getConnectivityStatus()) === "offline") {
-            Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
+            setErrorMessage("Tindakan ini membutuhkan koneksi internet.");
             return;
         }
+        const affected = parseExpensePeriod(form.tanggal_pengeluaran)!;
         try {
             setIsSubmitting(true);
             setErrorMessage("");
@@ -248,63 +312,80 @@ export function useLaporanKeuangan() {
             setShowExpenseForm(false);
             try {
                 await refreshAfterMutation(affected.bulan, affected.tahun);
-                Alert.alert("Sukses", "Pengeluaran berhasil dicatat.");
             } catch {
                 setNotice(
                     "Pengeluaran tersimpan di server, tetapi cache laporan belum berhasil diperbarui.",
                 );
-                Alert.alert(
-                    "Pengeluaran Tersimpan",
-                    "Pengeluaran tersimpan di server, tetapi cache lokal belum berhasil diperbarui.",
-                );
             }
         } catch (error) {
-            const validationErrors = (
-                error as { response?: { data?: { errors?: Record<string, string[]> } } }
-            )?.response?.data?.errors;
-            if (validationErrors) {
-                const firstError = Object.values(validationErrors)[0];
-                setErrorMessage(firstError?.[0] || "Validasi gagal.");
-            } else {
-                setErrorMessage(getErrorMessage(error, "Gagal mencatat pengeluaran."));
-            }
-            Alert.alert("Gagal", "Gagal menyimpan pengeluaran.");
+            const firstValidation = getFirstValidationError(error);
+            setErrorMessage(
+                firstValidation || getApiErrorMessage(error, "Gagal mencatat pengeluaran."),
+            );
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleDeleteExpense = async (idPengeluaran: number) => {
+    // ─── Hapus pengeluaran — dengan konfirmasi dua langkah (poin 8) ───────────
+
+    /**
+     * Langkah 1: Tampilkan modal konfirmasi dengan ringkasan data pengeluaran.
+     * Pengguna harus melihat detail sebelum bisa menghapus.
+     */
+    /**
+     * Langkah 1: Tampilkan modal konfirmasi dengan ringkasan data pengeluaran.
+     * Pengguna harus melihat detail sebelum bisa menghapus.
+     * Cek koneksi dilakukan di Langkah 2 (confirmDeleteExpense) saat eksekusi.
+     */
+    const requestDeleteExpense = useCallback(
+        (
+            idPengeluaran: number,
+            judulPengeluaran: string,
+            jumlahPengeluaran: number,
+            tanggalPengeluaran: string,
+        ) => {
+            setDeleteConfirm({
+                visible: true,
+                idPengeluaran,
+                judulPengeluaran,
+                jumlahPengeluaran,
+                tanggalPengeluaran,
+            });
+        },
+        [],
+    );
+
+    /** Langkah 2: Pengguna menekan "Hapus" pada modal — eksekusi penghapusan. */
+    const confirmDeleteExpense = useCallback(async () => {
+        if (!deleteConfirm.idPengeluaran) return;
+        const idPengeluaran = deleteConfirm.idPengeluaran;
+        setDeleteConfirm(INITIAL_DELETE_STATE);
         if ((await getConnectivityStatus()) === "offline") {
-            Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
+            setErrorMessage("Tindakan ini membutuhkan koneksi internet.");
             return;
         }
+        setIsDeleting(true);
         try {
             await laporanService.deletePengeluaran(idPengeluaran);
             try {
                 await refreshAfterMutation(bulan, tahun);
-                Alert.alert("Sukses", "Pengeluaran berhasil dihapus.");
             } catch {
                 setNotice(
                     "Pengeluaran terhapus di server, tetapi cache laporan belum berhasil diperbarui.",
                 );
-                Alert.alert(
-                    "Pengeluaran Terhapus",
-                    "Pengeluaran terhapus di server, tetapi cache lokal belum berhasil diperbarui.",
-                );
             }
         } catch {
-            Alert.alert("Gagal", "Gagal menghapus pengeluaran.");
+            setErrorMessage("Gagal menghapus pengeluaran.");
+        } finally {
+            setIsDeleting(false);
         }
-    };
+    }, [bulan, deleteConfirm.idPengeluaran, refreshAfterMutation, tahun]);
 
-    const formatCurrency = (amount: number) =>
-        new Intl.NumberFormat("id-ID", {
-            style: "currency",
-            currency: "IDR",
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(amount);
+    /** Pengguna menekan "Batal" pada modal konfirmasi hapus. */
+    const cancelDeleteExpense = useCallback(() => {
+        setDeleteConfirm(INITIAL_DELETE_STATE);
+    }, []);
 
     return {
         bulan,
@@ -315,6 +396,7 @@ export function useLaporanKeuangan() {
         isLoading,
         isRefreshing,
         isSubmitting,
+        isDeleting,
         showExpenseForm,
         setShowExpenseForm,
         errorMessage,
@@ -327,7 +409,20 @@ export function useLaporanKeuangan() {
         fetchData: refresh,
         refresh,
         handleSubmitExpense,
-        handleDeleteExpense,
+        /** Status koneksi reaktif — true jika perangkat sedang offline */
+        isOffline,
+        /** State modal konfirmasi sebelum hapus pengeluaran */
+        deleteConfirm,
+        /** Langkah 1: Minta konfirmasi hapus (tampilkan modal) */
+        requestDeleteExpense,
+        /** Langkah 2: Eksekusi hapus setelah pengguna konfirmasi */
+        confirmDeleteExpense,
+        /** Batalkan hapus */
+        cancelDeleteExpense,
+        /** Fungsi format currency — disediakan dari utils, bukan didefinisikan ulang */
         formatCurrency,
+        /** @deprecated Gunakan requestDeleteExpense untuk konfirmasi dua langkah */
+        handleDeleteExpense: (id: number) =>
+            requestDeleteExpense(id, "", 0, ""),
     };
 }

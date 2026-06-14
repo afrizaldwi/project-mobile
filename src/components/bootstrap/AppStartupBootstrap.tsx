@@ -1,4 +1,5 @@
 import { useAuth } from "@/auth/AuthContext";
+import { readDashboardSnapshot } from "@/database/dashboardRepository";
 import {
     buildStartupPreloadTasks,
     runBoundedStartupTasks,
@@ -83,7 +84,19 @@ export function AppStartupBootstrap() {
 
         void (async () => {
             const startedAt = Date.now();
-            const shouldHoldSplash = !hasNativeSplashBeenHidden();
+            let shouldHoldSplash = !hasNativeSplashBeenHidden();
+
+            if (shouldHoldSplash) {
+                const dashboardScope =
+                    user.role === "admin" ? "admin" : sessionKey;
+
+                try {
+                    await readDashboardSnapshot(db, dashboardScope);
+                    shouldHoldSplash = false;
+                } catch {
+                    shouldHoldSplash = true;
+                }
+            }
             let connectivity: ConnectivityStatus = "unknown";
             if (__DEV__) {
                 console.debug("[STARTUP PRELOAD] Preload started", {

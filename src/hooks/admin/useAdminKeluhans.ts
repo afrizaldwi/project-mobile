@@ -10,14 +10,12 @@ import { getConnectivityStatus, type ConnectivityStatus } from "@/network/connec
 import type { Keluhan } from "@/types";
 import type { AdminKeluhanStatus, AdminKeluhanSummary } from "@/types/keluhan";
 import type { PaginationMeta } from "@/types/pagination";
+import { getErrorMessage, getHttpStatus, isFresh } from "@/utils/helpers";
 
 export type KeluhanFilterStatus = AdminKeluhanStatus;
 const PAGE_SIZE = 20;
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
-function getErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || (error instanceof Error ? error.message : null) || fallback; }
-function getHttpStatus(error: unknown): number | undefined { return (error as { response?: { status?: number } }).response?.status; }
-function getSyncErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback; }
-function isFresh(value: string | null): boolean { const timestamp = value ? Date.parse(value) : Number.NaN; return Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS; }
+
 
 export function useAdminKeluhans() {
     const db = useSQLiteContext();
@@ -42,13 +40,13 @@ export function useAdminKeluhans() {
     const syncAndReload = useCallback(async (force: boolean, showRefresh = false, cacheUsable = true) => {
         if (mountedRef.current && showRefresh) setRefreshing(true);
         try {
-            if (!force) { const metadata = await getKeluhanSyncMetadata(db); if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt)) return; }
+            if (!force) { const metadata = await getKeluhanSyncMetadata(db); if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt, CACHE_FRESHNESS_MS)) return; }
             const status = await getConnectivityStatus(); if (!mountedRef.current || !focusedRef.current) return; setConnectivity(status);
-            if (status === "offline") { if (!cacheUsable) setError("Offline dan belum ada data KELUHAN tersimpan di perangkat."); else setNotice(showRefresh ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan." : "Offline. Menampilkan data KELUHAN yang tersimpan di perangkat."); return; }
+            if (status === "offline") { if (!cacheUsable) setError("Offline dan belum ada data KELUHAN tersimpan di perangkat."); else setNotice(null); return; }
             generationRef.current += 1; loadingMoreRef.current = false; requestedPageRef.current = null; setLoadingMore(false); setSyncing(true);
             await synchronizeKeluhanCache(db, force); if (!mountedRef.current || !focusedRef.current) return; setConnectivity("online"); setNotice(null); await loadFirstPage(true);
         } catch (syncError) {
-            if (!mountedRef.current || !focusedRef.current) return; const status = getHttpStatus(syncError); const message = getSyncErrorMessage(syncError, cacheUsable ? "Sinkronisasi KELUHAN gagal. Cache lama tetap digunakan." : "Data KELUHAN belum tersedia dan sinkronisasi tidak dapat diselesaikan.");
+            if (!mountedRef.current || !focusedRef.current) return; const status = getHttpStatus(syncError); const message = getErrorMessage(syncError, cacheUsable ? "Sinkronisasi KELUHAN gagal. Cache lama tetap digunakan." : "Data KELUHAN belum tersedia dan sinkronisasi tidak dapat diselesaikan.");
             if (!cacheUsable || status === 401 || status === 403) setError(message); else setNotice(message);
         } finally { if (mountedRef.current) { setSyncing(false); setRefreshing(false); setInitialLoading(false); } }
     }, [db, loadFirstPage]);

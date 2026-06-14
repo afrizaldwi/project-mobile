@@ -13,7 +13,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { syncAdminDashboard } from "@/database/dashboardSync";
 import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
-import type { AdminDashboardSummary } from "@/types";
+import type { AdminDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
 
 const formatNumber = (value: number) => {

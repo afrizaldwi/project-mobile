@@ -1,9 +1,9 @@
 import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
 
-import { finishAdminPenghuni } from "@/api/penghuniService";
+import { PenghuniService } from "@/api/penghuniService";
+import { useOfflineGuard } from "@/hooks/useOfflineGuard";
 import { markKamarCacheDirty } from "@/database/kamarRepository";
 import {
     getLocalPenghuniPage,
@@ -22,10 +22,15 @@ import type {
     AdminPenghuniItem,
     AdminPenghuniItemStatus,
 } from "@/types/penghuni";
+import { getApiErrorMessage, getHttpStatusCode } from "@/utils/errorUtils";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type StatusPenghuni = "AKTIF" | "SELESAI" | "DIBATALKAN";
 export type PenghuniFilterStatus = "AKTIF" | "SELESAI" | "SEMUA";
-export interface Penghuni {
+
+/** View model penghuni yang digunakan di UI layer */
+export interface PenghuniViewModel {
     id_sewa: number;
     nama: string;
     email: string;
@@ -37,36 +42,33 @@ export interface Penghuni {
     hargaBulanan: string;
 }
 
+/** @deprecated Gunakan PenghuniViewModel */
+export type Penghuni = PenghuniViewModel;
+
+// ─── Konstanta ────────────────────────────────────────────────────────────────
+
 const PAGE_SIZE = 20;
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
+
 const LOCAL_STATUS: Record<PenghuniFilterStatus, PenghuniLocalFilterStatus> = {
     AKTIF: "aktif",
     SELESAI: "selesai",
     SEMUA: "all",
 };
+
 const STATUS_LABEL: Record<AdminPenghuniItemStatus, StatusPenghuni> = {
     aktif: "AKTIF",
     selesai: "SELESAI",
     dibatalkan: "DIBATALKAN",
 };
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (
-        (error as { response?: { data?: { message?: string } } })?.response?.data
-            ?.message ||
-        (error instanceof Error ? error.message : null) ||
-        fallback
-    );
-}
-function getHttpStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } }).response?.status;
-}
 function isFresh(value: string | null): boolean {
     const timestamp = value ? Date.parse(value) : Number.NaN;
     return (
         Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS
     );
 }
-function mapResponseToPenghuni(sewa: AdminPenghuniItem): Penghuni {
+
+function mapToPenghuniViewModel(sewa: AdminPenghuniItem): PenghuniViewModel {
     return {
         id_sewa: sewa.id_sewa,
         nama: sewa.user?.nama_lengkap || "—",
@@ -80,13 +82,30 @@ function mapResponseToPenghuni(sewa: AdminPenghuniItem): Penghuni {
     };
 }
 
+// ─── State untuk modal konfirmasi arsip ───────────────────────────────────────
+
+export interface ArchiveConfirmState {
+    visible: boolean;
+    idSewa: number | null;
+    penghuniData: PenghuniViewModel | null;
+}
+
+const INITIAL_ARCHIVE_STATE: ArchiveConfirmState = {
+    visible: false,
+    idSewa: null,
+    penghuniData: null,
+};
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function usePenghuni() {
     const db = useSQLiteContext();
+    const isOffline = useOfflineGuard();
     const [activeTab, setActiveTabState] =
         useState<PenghuniFilterStatus>("AKTIF");
     const [searchQuery, setSearchQueryState] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [data, setData] = useState<Penghuni[]>([]);
+    const [data, setData] = useState<PenghuniViewModel[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -96,6 +115,12 @@ export function usePenghuni() {
         useState<ConnectivityStatus>("unknown");
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [isArchiving, setIsArchiving] = useState(false);
+
+    /** State untuk modal konfirmasi sebelum arsip penghuni (poin 8) */
+    const [archiveConfirm, setArchiveConfirm] =
+        useState<ArchiveConfirmState>(INITIAL_ARCHIVE_STATE);
+
     const mountedRef = useRef(false);
     const focusedRef = useRef(false);
     const generationRef = useRef(0);
@@ -114,6 +139,7 @@ export function usePenghuni() {
             generationRef.current += 1;
         };
     }, []);
+
     useEffect(() => {
         const timeout = setTimeout(
             () => setDebouncedSearch(searchQuery.trim().slice(0, 100)),
@@ -121,6 +147,8 @@ export function usePenghuni() {
         );
         return () => clearTimeout(timeout);
     }, [searchQuery]);
+
+    // ─── Load halaman pertama dari cache lokal ────────────────────────────────
 
     const loadFirstPage = useCallback(
         async (soft = false) => {
@@ -146,12 +174,12 @@ export function usePenghuni() {
                     status: query.status,
                 });
                 if (!mountedRef.current || generation !== generationRef.current) return;
-                setData(response.data.map(mapResponseToPenghuni));
+                setData(response.data.map(mapToPenghuniViewModel));
                 setMeta(response.meta);
             } catch (loadError) {
                 if (mountedRef.current && generation === generationRef.current)
                     setError(
-                        getErrorMessage(loadError, "Gagal membaca cache PENGHUNI lokal."),
+                        getApiErrorMessage(loadError, "Gagal membaca cache PENGHUNI lokal."),
                     );
             } finally {
                 if (mountedRef.current && generation === generationRef.current)
@@ -160,6 +188,8 @@ export function usePenghuni() {
         },
         [db],
     );
+
+    // ─── Sinkronisasi dengan server dan reload ────────────────────────────────
 
     const syncAndReload = useCallback(
         async (force: boolean, showRefresh = false, cacheUsable = true) => {
@@ -182,12 +212,7 @@ export function usePenghuni() {
                         setError(
                             "Offline dan belum ada data PENGHUNI tersimpan di perangkat.",
                         );
-                    else
-                        setNotice(
-                            showRefresh
-                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
-                                : "Offline. Menampilkan data PENGHUNI yang tersimpan di perangkat.",
-                        );
+                    else setNotice(null);
                     return;
                 }
                 generationRef.current += 1;
@@ -202,8 +227,8 @@ export function usePenghuni() {
                 await loadFirstPage(true);
             } catch (syncError) {
                 if (!mountedRef.current || !focusedRef.current) return;
-                const status = getHttpStatus(syncError);
-                const message = getErrorMessage(
+                const status = getHttpStatusCode(syncError);
+                const message = getApiErrorMessage(
                     syncError,
                     "Sinkronisasi PENGHUNI gagal. Cache lama tetap digunakan.",
                 );
@@ -230,7 +255,7 @@ export function usePenghuni() {
             })().catch((focusError) => {
                 if (mountedRef.current) {
                     setError(
-                        getErrorMessage(focusError, "Gagal menyiapkan cache PENGHUNI."),
+                        getApiErrorMessage(focusError, "Gagal menyiapkan cache PENGHUNI."),
                     );
                     setInitialLoading(false);
                 }
@@ -243,9 +268,12 @@ export function usePenghuni() {
             };
         }, [db, loadFirstPage, syncAndReload]),
     );
+
     useEffect(() => {
         if (focusedRef.current) void loadFirstPage();
     }, [activeTab, debouncedSearch, loadFirstPage]);
+
+    // ─── Load halaman berikutnya (infinite scroll) ────────────────────────────
 
     const loadMore = useCallback(async () => {
         if (
@@ -277,7 +305,7 @@ export function usePenghuni() {
                 const ids = new Set(current.map((item) => item.id_sewa));
                 return [
                     ...current,
-                    ...response.data.map(mapResponseToPenghuni).filter((item) => {
+                    ...response.data.map(mapToPenghuniViewModel).filter((item) => {
                         if (ids.has(item.id_sewa)) return false;
                         ids.add(item.id_sewa);
                         return true;
@@ -289,7 +317,7 @@ export function usePenghuni() {
             requestedPageRef.current = null;
             if (mountedRef.current && generation === generationRef.current)
                 setError(
-                    getErrorMessage(
+                    getApiErrorMessage(
                         loadError,
                         "Gagal memuat halaman cache PENGHUNI berikutnya.",
                     ),
@@ -302,65 +330,67 @@ export function usePenghuni() {
         }
     }, [data.length, db, initialLoading, meta, refreshing, syncing]);
 
-    const handleArchive = useCallback(
-        async (idSewa: number) => {
+    // ─── Arsip penghuni — dengan konfirmasi dua langkah (poin 8) ─────────────
+
+    /**
+     * Langkah 1: Tampilkan modal konfirmasi dengan ringkasan data penghuni.
+     * Pengguna harus melihat detail sebelum bisa melanjutkan.
+     */
+    const requestArchive = useCallback(
+        async (item: PenghuniViewModel) => {
             const status = await getConnectivityStatus();
             setConnectivity(status);
             if (status === "offline") {
-                Alert.alert(
-                    "Koneksi Diperlukan",
-                    "Tindakan ini membutuhkan koneksi internet.",
-                );
+                setArchiveConfirm(INITIAL_ARCHIVE_STATE);
+                setError("Tindakan ini membutuhkan koneksi internet.");
                 return;
             }
-            Alert.alert(
-                "Konfirmasi",
-                "Apakah Anda yakin ingin mengarsipkan penghuni ini sebagai alumni?",
-                [
-                    { text: "Batal", style: "cancel" },
-                    {
-                        text: "Arsipkan",
-                        style: "destructive",
-                        onPress: async () => {
-                            try {
-                                const message = await finishAdminPenghuni(idSewa);
-                                try {
-                                    await Promise.all([
-                                        markPenghuniCacheDirty(db),
-                                        markKamarCacheDirty(db),
-                                    ]);
-                                    await synchronizePenghuniCache(db);
-                                    await loadFirstPage(true);
-                                    Alert.alert(
-                                        "Sukses",
-                                        message || "Penghuni berhasil diarsipkan.",
-                                    );
-                                } catch (cacheError) {
-                                    console.error(
-                                        "Failed to refresh PENGHUNI cache after finish:",
-                                        cacheError,
-                                    );
-                                    Alert.alert(
-                                        "Penghuni Diarsipkan",
-                                        "Perubahan tersimpan di server, tetapi cache lokal belum berhasil diperbarui.",
-                                    );
-                                }
-                            } catch (mutationError) {
-                                Alert.alert(
-                                    "Gagal",
-                                    getErrorMessage(
-                                        mutationError,
-                                        "Gagal mengarsipkan penghuni.",
-                                    ),
-                                );
-                            }
-                        },
-                    },
-                ],
-            );
+            setArchiveConfirm({
+                visible: true,
+                idSewa: item.id_sewa,
+                penghuniData: item,
+            });
         },
-        [db, loadFirstPage],
+        [],
     );
+
+    /** Langkah 2: Pengguna menekan "Konfirmasi" pada modal — eksekusi arsip. */
+    const confirmArchive = useCallback(async () => {
+        if (!archiveConfirm.idSewa) return;
+        const idSewa = archiveConfirm.idSewa;
+        setArchiveConfirm(INITIAL_ARCHIVE_STATE);
+        setIsArchiving(true);
+        try {
+            await PenghuniService.finish(idSewa);
+            try {
+                await Promise.all([
+                    markPenghuniCacheDirty(db),
+                    markKamarCacheDirty(db),
+                ]);
+                await synchronizePenghuniCache(db);
+                await loadFirstPage(true);
+            } catch (cacheError) {
+                console.error(
+                    "Failed to refresh PENGHUNI cache after finish:",
+                    cacheError,
+                );
+                setNotice(
+                    "Perubahan tersimpan di server, tetapi cache lokal belum berhasil diperbarui.",
+                );
+            }
+        } catch (mutationError) {
+            setError(
+                getApiErrorMessage(mutationError, "Gagal mengarsipkan penghuni."),
+            );
+        } finally {
+            setIsArchiving(false);
+        }
+    }, [archiveConfirm.idSewa, db, loadFirstPage]);
+
+    /** Pengguna menekan "Batal" pada modal konfirmasi arsip. */
+    const cancelArchive = useCallback(() => {
+        setArchiveConfirm(INITIAL_ARCHIVE_STATE);
+    }, []);
 
     return {
         activeTab,
@@ -374,15 +404,26 @@ export function usePenghuni() {
         refreshing,
         loadingMore,
         syncing,
+        isArchiving,
         connectivity,
+        isOffline,
         error,
         notice,
+        /** State modal konfirmasi arsip penghuni */
+        archiveConfirm,
+        /** Langkah 1: Minta konfirmasi arsip (tampilkan modal) */
+        requestArchive,
+        /** Langkah 2: Eksekusi arsip setelah pengguna konfirmasi */
+        confirmArchive,
+        /** Batalkan arsip */
+        cancelArchive,
         refetch: loadFirstPage,
         onRefresh: () =>
             void syncAndReload(true, true, data.length > 0 || Boolean(meta)),
         loadMore,
         retry: () =>
             void syncAndReload(true, false, data.length > 0 || Boolean(meta)),
-        handleArchive,
+        /** @deprecated Gunakan requestArchive untuk konfirmasi dua langkah */
+        handleArchive: requestArchive,
     };
 }

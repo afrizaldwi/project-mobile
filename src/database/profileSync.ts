@@ -7,22 +7,20 @@ import {
   markProfileCacheDirty,
   publishProfileSnapshot,
 } from "@/database/profileRepository";
+import { parseProfileScope } from "@/database/profileScope";
 import type { UserRole } from "@/types";
-import type { ProfileResponse, ProfileUser } from "@/types/profile";
+import {
+  normalizeNullableProfileKamarStatus,
+  normalizeNullableProfileSewaStatus,
+  type ProfileResponse,
+  type ProfileUser,
+} from "@/types/profile";
 import {
   getSafeErrorMessage,
   isRecoverableApiAvailabilityError,
 } from "@/utils/apiErrors";
 
 const activeSyncs = new Map<string, Promise<void>>();
-
-function parseScope(scope: string): { role: UserRole; userId: number } {
-  const match = scope.match(/^(admin|penyewa):(\d+)$/);
-  const userId = match ? Number(match[2]) : Number.NaN;
-  if (!match || !Number.isInteger(userId) || userId < 1)
-    throw new Error("Scope profil tidak valid.");
-  return { role: match[1] as UserRole, userId };
-}
 
 function text(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -67,7 +65,7 @@ function normalizeProfileResponse(
   scope: string,
   expectedRole: UserRole,
 ): ProfileUser {
-  const { role, userId } = parseScope(scope);
+  const { role, userId } = parseProfileScope(scope);
   const user = response?.user;
 
   if (!user || typeof user !== "object") {
@@ -98,7 +96,7 @@ function normalizeProfileResponse(
   const alamatAsal = normalizeOptionalString(user.alamat_asal, "alamat_asal");
   const createdAt = normalizeOptionalString(user.created_at, "created_at");
   const updatedAt = normalizeOptionalString(user.updated_at, "updated_at");
-  const topLevelStatusSewa = normalizeOptionalString(
+  const topLevelStatusSewa = normalizeNullableProfileSewaStatus(
     user.status_sewa,
     "status_sewa",
   );
@@ -114,7 +112,7 @@ function normalizeProfileResponse(
     sewa?.tanggal_keluar,
     "sewa.tanggal_keluar",
   );
-  const nestedStatusSewa = normalizeOptionalString(
+  const nestedStatusSewa = normalizeNullableProfileSewaStatus(
     sewa?.status_sewa,
     "sewa.status_sewa",
   );
@@ -123,7 +121,7 @@ function normalizeProfileResponse(
     kamar?.nomor_kamar,
     "kamar.nomor_kamar",
   );
-  const statusKamar = normalizeOptionalString(
+  const statusKamar = normalizeNullableProfileKamarStatus(
     kamar?.status_kamar,
     "kamar.status_kamar",
   );
@@ -160,7 +158,7 @@ async function runProfileSync(
   scope: string,
   expectedRole: UserRole,
 ): Promise<void> {
-  const { userId, role } = parseScope(scope);
+  const { userId, role } = parseProfileScope(scope);
   try {
     const response = await profileService.getProfile();
     const normalized = normalizeProfileResponse(response, scope, expectedRole);

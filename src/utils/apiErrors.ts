@@ -1,5 +1,13 @@
 import { isAxiosError } from "axios";
 
+type ApiErrorResponse = {
+    response?: {
+        data?: {
+            message?: unknown;
+        };
+    };
+};
+
 export function isRecoverableApiAvailabilityError(error: unknown): boolean {
     if (!isAxiosError(error)) return false;
 
@@ -13,6 +21,18 @@ export function isRecoverableApiAvailabilityError(error: unknown): boolean {
     return typeof status === "number" && status >= 500;
 }
 
+export function getErrorMessage(error: unknown, fallback: string): string {
+    return (
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (error instanceof Error ? error.message : null) ||
+        fallback
+    );
+}
+
+export function getHttpStatus(error: unknown): number | undefined {
+    return (error as { response?: { status?: number } }).response?.status;
+}
+
 export function getSafeErrorMessage(error: unknown): string {
     if (isAxiosError(error)) {
         if (typeof error.response?.status === "number") {
@@ -24,4 +44,17 @@ export function getSafeErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;
     return "Unknown error";
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+    const message = (error as ApiErrorResponse)?.response?.data?.message;
+    if (typeof message === "string" && message.length > 0) {
+        return message;
+    }
+
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallback;
 }

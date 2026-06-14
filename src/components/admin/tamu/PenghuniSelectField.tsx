@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
-import { PenghuniAktif } from "@/api/tamuService";
+import type { PenghuniAktif } from "@/types/tamu";
 
 interface PenghuniSelectFieldProps {
     selectedPenghuni?: PenghuniAktif;

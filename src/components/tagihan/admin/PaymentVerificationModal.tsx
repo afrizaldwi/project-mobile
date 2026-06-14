@@ -10,8 +10,9 @@ import {
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
-import { PendingPembayaranItem } from "@/api/tagihanApi";
+import type { PendingPembayaranItem } from "@/types/tagihan";
 import { normalizeStorageUrl } from "@/utils/storageUrl";
+import { formatRupiah } from "@/utils/formatters";
 
 interface PaymentVerificationModalProps {
   visible: boolean;
@@ -23,12 +24,7 @@ interface PaymentVerificationModalProps {
   onClose: () => void;
 }
 
-const formatRupiah = (value: string | number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
+
 
 export const PaymentVerificationModal: React.FC<PaymentVerificationModalProps> = ({
   visible,
