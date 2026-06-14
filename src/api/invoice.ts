@@ -12,10 +12,10 @@ export type InvoiceItem = {
     tanggal_tagihan: string | null;
     tanggal_jatuh_tempo: string | null;
     tanggal_bayar: string | null;
-    jumlah_bayar: string | number;
-    total_tagihan: string | number;
+    jumlah_bayar: number;
+    total_tagihan: number;
     metode_pembayaran: string | null;
-    status_verifikasi: "pending" | "diterima" | "ditolak";
+
     catatan_admin: string | null;
     penyewa: {
         nama_lengkap: string;
@@ -54,6 +54,9 @@ export const invoiceApi = {
 
 async function downloadAndSharePdf(fullUrl: string, kodeInvoice: string) {
     const token = await getToken();
+if (!token) {
+    throw new Error("Sesi login tidak ditemukan. Silakan login ulang.");
+}
     const fileName = `${kodeInvoice || "invoice"}.pdf`;
 
     const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
@@ -133,26 +136,24 @@ export function buildCsvContent(invoices: InvoiceItem[]): string {
     return "\uFEFF" + lines.join("\n");
 }
 
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
 export async function exportCsvToShare(invoices: InvoiceItem[]) {
     const today = new Date().toISOString().slice(0, 10);
     const fileName = `laporan-transaksi-${today}.csv`;
     const csvContent = buildCsvContent(invoices);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const FS = require("expo-file-system");
-
     const dir: string =
-        FS.documentDirectory ??
-        FS.cacheDirectory ??
-        FS.temporaryDirectory ??
+        FileSystem.documentDirectory ??
+        FileSystem.cacheDirectory ??
         "";
 
     if (!dir) throw new Error("Storage tidak tersedia");
 
     const fileUri: string = dir + fileName;
 
-    await FS.writeAsStringAsync(fileUri, csvContent, {
-        encoding: "utf8",
+    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
     });
 
     const canShare = await Sharing.isAvailableAsync();
