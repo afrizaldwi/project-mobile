@@ -4,14 +4,14 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } fr
 import { ListEmptyView } from "@/components/common/ListEmptyView";
 import { ListLoadingView } from "@/components/common/ListLoadingView";
 import { TamuCard } from "@/components/TamuCard";
-import type { AdminTamuItem } from "@/types/tamu";
+import type { Tamu } from "@/types";
 
 interface AdminTamuListProps {
     loading: boolean;
     refreshing: boolean;
     loadingMore: boolean;
     error: string | null;
-    tamus: AdminTamuItem[];
+    tamus: Tamu[];
     onRefresh: () => void;
     onLoadMore: () => void;
     onRetry: () => void;

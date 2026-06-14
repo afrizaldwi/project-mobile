@@ -4,7 +4,7 @@ import { tamuService } from "@/api/tamuService";
 import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import { clearTamuStaging, getTamuStagingCount, insertTamuStagingPage, markTamuCacheDirty, publishTamuStaging } from "@/database/tamuRepository";
 import type { PaginationMeta } from "@/types/pagination";
-import type { AdminTamuItem } from "@/types/tamu";
+import type { Tamu } from "@/types";
 
 const SYNC_PAGE_SIZE = 50;
 let activeSync: Promise<void> | null = null;
@@ -48,7 +48,7 @@ export function normalizeVisitDateJakarta(value: string): string {
     }).formatToParts(parsed));
 }
 
-function validateItem(item: AdminTamuItem): void {
+function validateItem(item: Tamu): void {
     if (!isInteger(item.id_tamu) || item.id_tamu < 1 || !isInteger(item.id_user) || item.id_user < 1) {
         throw new Error("Respons sinkronisasi TAMU memiliki ID yang tidak valid.");
     }

@@ -1,18 +1,28 @@
-import { tagihanApi } from '@/api/tagihanApi';
+import { tagihanApi } from "@/api/tagihanApi";
+import type {
+  PaymentReviewResponse,
+  UploadPaymentProofResponse,
+} from "@/types/tagihan";
 
 export class PaymentFacade {
-  // Facade untuk Verifikasi Terima (Admin)
-  static async verifyPayment(id: number, catatan: string) {
-    return await tagihanApi.verifyPayment(id, catatan);
+  static async verifyPayment(
+    id: number,
+    catatan: string,
+  ): Promise<PaymentReviewResponse> {
+    return tagihanApi.verifyPayment(id, catatan);
   }
 
-  // Facade untuk Verifikasi Tolak (Admin)
-  static async rejectPayment(id: number, catatan: string) {
-    return await tagihanApi.rejectPayment(id, catatan);
+  static async rejectPayment(
+    id: number,
+    catatan: string,
+  ): Promise<PaymentReviewResponse> {
+    return tagihanApi.rejectPayment(id, catatan);
   }
 
-  // Facade untuk Upload Bukti (Penyewa)
-  static async uploadProof(id: number, data: FormData) {
-    return await tagihanApi.uploadPaymentProof(id, data);
+  static async uploadProof(
+    id: number,
+    data: FormData,
+  ): Promise<UploadPaymentProofResponse> {
+    return tagihanApi.uploadPaymentProof(id, data);
   }
 }

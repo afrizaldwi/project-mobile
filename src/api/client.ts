@@ -1,6 +1,6 @@
 import { create, type InternalAxiosRequestConfig } from "axios";
 
-import { deleteToken, getToken } from "@/auth/tokenStorage";
+import { deleteCachedUser, deleteToken, getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 
 type MultipartFieldDebug = {
@@ -14,6 +14,7 @@ type MultipartFieldDebug = {
 type AuthSessionInactiveHandler = (message: string) => void | Promise<void>;
 
 let authSessionInactiveHandler: AuthSessionInactiveHandler | null = null;
+let sessionTerminationPromise: Promise<void> | null = null;
 
 export function setAuthSessionInactiveHandler(
   handler: AuthSessionInactiveHandler | null,
@@ -117,6 +118,10 @@ function isLoginRequest(url: string) {
   return url === "/login" || url.endsWith("/login");
 }
 
+function isLogoutRequest(url: string) {
+  return url === "/logout" || url.endsWith("/logout");
+}
+
 function shouldEndCurrentSession(error: unknown) {
   const candidate = error as {
     config?: InternalAxiosRequestConfig;
@@ -127,7 +132,7 @@ function shouldEndCurrentSession(error: unknown) {
   const message = candidate.response?.data?.message ?? "";
 
   if (status === 401) {
-    if (isLoginRequest(url)) {
+    if (isLoginRequest(url) || isLogoutRequest(url)) {
       return false;
     }
 
@@ -144,11 +149,30 @@ function shouldEndCurrentSession(error: unknown) {
 async function endCurrentSession(
   message = "Sesi Anda sudah tidak aktif. Silakan login kembali.",
 ) {
-  await deleteToken();
-  await authSessionInactiveHandler?.(message);
+  if (sessionTerminationPromise) {
+    await sessionTerminationPromise;
+    return;
+  }
+
+  sessionTerminationPromise = (async () => {
+    const token = await getToken();
+
+    if (!token) {
+      return;
+    }
+
+    await deleteToken();
+    await deleteCachedUser();
+    await authSessionInactiveHandler?.(message);
+  })();
+
+  try {
+    await sessionTerminationPromise;
+  } finally {
+    sessionTerminationPromise = null;
+  }
 }
 
-// Penerapan Factory Pattern untuk HTTP Client
 export const createApiClient = (baseURL: string = API_BASE_URL) => {
   const client = create({
     baseURL,
@@ -189,5 +213,4 @@ export const createApiClient = (baseURL: string = API_BASE_URL) => {
   return client;
 };
 
-// Membuat instance default agar logika dan import di file lain tidak perlu diubah
 export const apiClient = createApiClient();

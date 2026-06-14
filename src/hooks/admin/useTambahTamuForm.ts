@@ -3,7 +3,8 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 
-import { tamuService, PenghuniAktif } from "@/api/tamuService";
+import { tamuService } from "@/api/tamuService";
+import type { PenghuniAktif } from "@/types/tamu";
 import { markTamuCacheDirty } from "@/database/tamuRepository";
 import { getConnectivityStatus } from "@/network/connectivity";
 
@@ -30,18 +31,29 @@ export function useTambahTamuForm() {
 
     const selectedPenghuni = penghuniList.find((penghuni) => penghuni.id_user === idUser);
 
-    const handleSubmit = async () => {
+    const confirmThenSubmit = () => {
         if (!nama.trim() || !noHp.trim() || !keperluan.trim() || !idUser) {
             Alert.alert("Validasi Error", "Semua kolom dan penghuni yang dituju wajib diisi.");
             return;
         }
+        Alert.alert(
+            "Konfirmasi",
+            "Apakah Anda yakin ingin menambahkan data tamu ini?",
+            [
+                { text: "Batal", style: "cancel" },
+                { text: "Ya, Tambahkan", onPress: handleSubmit },
+            ]
+        );
+    };
+
+    const handleSubmit = async () => {
         if (await getConnectivityStatus() === "offline") {
             Alert.alert("Koneksi Diperlukan", "Tindakan ini membutuhkan koneksi internet.");
             return;
         }
         setIsSubmitting(true);
         try {
-            await tamuService.createAdminTamu({ nama_tamu: nama, no_hp_tamu: noHp, keperluan, id_user: idUser });
+            await tamuService.createAdminTamu({ nama_tamu: nama, no_hp_tamu: noHp, keperluan, id_user: idUser ?? undefined });
             try {
                 await markTamuCacheDirty(db);
             } catch (cacheError) {
@@ -58,6 +70,6 @@ export function useTambahTamuForm() {
     const selectPenghuni = (userId: number) => { setIdUser(userId); setModalVisible(false); };
     return {
         nama, setNama, noHp, setNoHp, keperluan, setKeperluan, selectedPenghuni, isSubmitting,
-        penghuniList, loadingPenghuni, modalVisible, setModalVisible, handleSubmit, selectPenghuni,
+        penghuniList, loadingPenghuni, modalVisible, setModalVisible, handleSubmit: confirmThenSubmit, selectPenghuni,
     };
 }

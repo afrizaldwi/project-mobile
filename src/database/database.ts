@@ -589,4 +589,8 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
     });
 }
 
+export function escapeLike(value: string): string {
+    return value.replace(/[\\%_]/g, "\\$&");
+}
+
 export const APP_DATABASE_NAME = "kost-bahagia.db";

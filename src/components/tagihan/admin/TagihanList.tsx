@@ -1,5 +1,7 @@
-import { TagihanReminderItem } from "@/api/tagihanApi";
+import type { TagihanReminderItem } from "@/types/tagihan";
 import { PaymentStateContext } from "@/services/payment/PaymentState";
+import { isPaidOrVerified } from "@/utils/tagihanHelpers";
+import { formatRupiah, formatDate } from "@/utils/formatters";
 import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 
@@ -10,21 +12,7 @@ interface TagihanListProps {
   onDownloadInvoice?: (item: TagihanReminderItem) => void;
 }
 
-const formatRupiah = (value: string | number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
 
-const formatDate = (value: string) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-};
 
 const getStatusConfig = (item: TagihanReminderItem) => {
   const state = PaymentStateContext.getState(item);
@@ -35,8 +23,7 @@ const getStatusConfig = (item: TagihanReminderItem) => {
   };
 };
 
-const isPaidOrVerified = (item: TagihanReminderItem) =>
-  item.status_tagihan === "lunas" || item.pembayaran_terbaru?.status_verifikasi === "diterima";
+
 
 const canSendWhatsApp = (item: TagihanReminderItem) =>
   item.status_tagihan !== "lunas" &&

@@ -4,7 +4,7 @@ import { getAdminPenghuniPage } from "@/api/penghuniService";
 import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import { clearPenghuniStaging, getPenghuniStagingCount, insertPenghuniStagingPage, markPenghuniCacheDirty, publishPenghuniStaging } from "@/database/penghuniRepository";
 import type { PaginationMeta } from "@/types/pagination";
-import type { AdminPenghuniItem } from "@/types/penghuni";
+import type { AdminPenghuniItem, AdminPenghuniListResponse } from "@/types/penghuni";
 
 const SYNC_PAGE_SIZE = 50;
 let activeSync: Promise<void> | null = null;
@@ -29,26 +29,38 @@ function validatePage(page: number, meta: PaginationMeta, itemCount: number, exp
     if (expected && (meta.total !== expected.total || meta.last_page !== expected.lastPage || meta.per_page !== expected.perPage)) throw new Error("Dataset PENGHUNI berubah selama sinkronisasi. Cache lama tetap digunakan.");
     return expected ?? { total: meta.total, lastPage: meta.last_page, perPage: meta.per_page };
 }
+async function fetchPenghuniPage(page: number): Promise<{ response: AdminPenghuniListResponse; page: number }> {
+    const response = await getAdminPenghuniPage({ page, per_page: SYNC_PAGE_SIZE, status: "all" });
+    if (!response || !Array.isArray(response.data)) throw new Error("Respons sinkronisasi PENGHUNI tidak valid.");
+    return { response, page };
+}
+
 async function runPenghuniSync(db: SQLiteDatabase): Promise<void> {
-    let page = 1; let traversedCount = 0; let expected: ExpectedSnapshot | null = null;
     const seenIds = new Set<number>(); const items: AdminPenghuniItem[] = [];
     try {
-        do {
-            const response = await getAdminPenghuniPage({ page, per_page: SYNC_PAGE_SIZE, status: "all" });
-            if (!response || !Array.isArray(response.data)) throw new Error("Respons sinkronisasi PENGHUNI tidak valid.");
-            expected = validatePage(page, response.meta, response.data.length, expected);
-            for (const item of response.data) { validateItem(item); if (seenIds.has(item.id_sewa)) throw new Error(`Sinkronisasi PENGHUNI berisi id_sewa duplikat: ${item.id_sewa}.`); seenIds.add(item.id_sewa); }
-            traversedCount += response.data.length; items.push(...response.data);
-            page += 1;
-        } while (expected && page <= expected.lastPage);
-        if (!expected || page - 1 !== expected.lastPage || traversedCount !== expected.total || seenIds.size !== expected.total) throw new Error("Jumlah PENGHUNI hasil sinkronisasi tidak sesuai metadata.");
-        const snapshot = expected;
+        const first = await fetchPenghuniPage(1);
+        const expected = validatePage(1, first.response.meta, first.response.data.length, null);
+        for (const item of first.response.data) { validateItem(item); if (seenIds.has(item.id_sewa)) throw new Error(`Sinkronisasi PENGHUNI berisi id_sewa duplikat: ${item.id_sewa}.`); seenIds.add(item.id_sewa); }
+        items.push(...first.response.data);
+
+        if (expected.lastPage > 1) {
+            const pageNumbers = [];
+            for (let p = 2; p <= expected.lastPage; p++) pageNumbers.push(p);
+            const pages = await Promise.all(pageNumbers.map((p) => fetchPenghuniPage(p)));
+            for (const { response, page } of pages) {
+                validatePage(page, response.meta, response.data.length, expected);
+                for (const item of response.data) { validateItem(item); if (seenIds.has(item.id_sewa)) throw new Error(`Sinkronisasi PENGHUNI berisi id_sewa duplikat: ${item.id_sewa}.`); seenIds.add(item.id_sewa); }
+                items.push(...response.data);
+            }
+        }
+
+        if (seenIds.size !== expected.total) throw new Error("Jumlah PENGHUNI hasil sinkronisasi tidak sesuai metadata.");
         await withDatabaseSyncLock("penghuni", async () => {
             await clearPenghuniStaging(db);
             await insertPenghuniStagingPage(db, items);
             const stagedCount = await getPenghuniStagingCount(db);
-            if (stagedCount !== snapshot.total) throw new Error(`Jumlah staging PENGHUNI tidak lengkap: ${stagedCount}/${snapshot.total}.`);
-            await publishPenghuniStaging(db, snapshot.total, new Date().toISOString());
+            if (stagedCount !== expected.total) throw new Error(`Jumlah staging PENGHUNI tidak lengkap: ${stagedCount}/${expected.total}.`);
+            await publishPenghuniStaging(db, expected.total, new Date().toISOString());
         });
     } catch (error) {
         await withDatabaseSyncLock("penghuni:failure", async () => {

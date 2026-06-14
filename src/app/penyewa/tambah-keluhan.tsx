@@ -112,6 +112,17 @@ export default function TambahKeluhanScreen() {
             return;
         }
 
+        Alert.alert(
+            "Konfirmasi",
+            "Apakah Anda yakin ingin mengirim laporan keluhan ini?",
+            [
+                { text: "Batal", style: "cancel" },
+                { text: "Ya, Kirim", onPress: submitKeluhan },
+            ]
+        );
+    };
+
+    const submitKeluhan = async () => {
         setIsSubmitting(true);
         try {
             await keluhanService.createPenyewaKeluhan({

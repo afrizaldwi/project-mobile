@@ -37,36 +37,49 @@ function validatePage(requestedPage: number, meta: PaginationMeta, itemCount: nu
     return expected ?? { total: meta.total, lastPage: meta.last_page };
 }
 
+async function fetchKamarPage(page: number): Promise<{ response: Awaited<ReturnType<typeof getKamarSyncPage>>; page: number }> {
+    return { response: await getKamarSyncPage({ page, per_page: SYNC_PAGE_SIZE, status: "semua" }), page };
+}
+
 async function runKamarSync(db: SQLiteDatabase): Promise<void> {
-    let page = 1;
-    let expected: ExpectedSnapshot | null = null;
     const seenIds = new Set<number>();
     const items: Awaited<ReturnType<typeof getKamarSyncPage>>["data"] = [];
 
     try {
-        do {
-            const response = await getKamarSyncPage({ page, per_page: SYNC_PAGE_SIZE, status: "semua" });
-            expected = validatePage(page, response.meta, response.data.length, expected);
-            for (const item of response.data) {
-                if (seenIds.has(item.id_kamar)) {
-                    throw new Error(`Sinkronisasi kamar berisi ID duplikat: .`);
-                }
-                seenIds.add(item.id_kamar);
-            }
-            items.push(...response.data);
-            page += 1;
-        } while (expected && page <= expected.lastPage);
-
-        if (!expected || page - 1 !== expected.lastPage) {
-            throw new Error("Sinkronisasi kamar tidak mencapai halaman terakhir yang diharapkan.");
+        const first = await fetchKamarPage(1);
+        const expected = validatePage(1, first.response.meta, first.response.data.length, null);
+        for (const item of first.response.data) {
+            if (seenIds.has(item.id_kamar)) throw new Error("Sinkronisasi kamar berisi ID duplikat.");
+            seenIds.add(item.id_kamar);
         }
-        const snapshot = expected;
+        items.push(...first.response.data);
+
+        if (expected.lastPage > 1) {
+            const pageNumbers = [];
+            for (let p = 2; p <= expected.lastPage; p++) pageNumbers.push(p);
+
+            const pages = await Promise.all(pageNumbers.map((p) => fetchKamarPage(p)));
+
+            for (const { response, page } of pages) {
+                validatePage(page, response.meta, response.data.length, expected);
+                for (const item of response.data) {
+                    if (seenIds.has(item.id_kamar)) throw new Error("Sinkronisasi kamar berisi ID duplikat.");
+                    seenIds.add(item.id_kamar);
+                }
+                items.push(...response.data);
+            }
+        }
+
+        if (seenIds.size !== expected.total) {
+            throw new Error(`Jumlah kamar hasil sinkronisasi tidak lengkap: ${seenIds.size}/${expected.total}.`);
+        }
+
         await withDatabaseSyncLock("kamar", async () => {
             await clearKamarStaging(db);
             await insertKamarStagingPage(db, items);
             const stagedCount = await getKamarStagingCount(db);
-            if (stagedCount !== snapshot.total) {
-                throw new Error(`Jumlah kamar hasil sinkronisasi tidak lengkap: ${stagedCount}/${snapshot.total}.`);
+            if (stagedCount !== expected.total) {
+                throw new Error(`Jumlah kamar hasil sinkronisasi tidak lengkap: ${stagedCount}/${expected.total}.`);
             }
             await publishKamarStaging(db, new Date().toISOString());
         });

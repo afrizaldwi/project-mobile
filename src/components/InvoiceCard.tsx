@@ -3,11 +3,11 @@ import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import type { InvoiceItem } from "@/api/invoice";
 import { InvoicePdfFactory } from "@/utils/InvoicePdfFactory";
+import { InvoiceListItemResponse } from "@/types/invoice";
 
 interface InvoiceCardProps {
-    invoice: InvoiceItem;
+    invoice: InvoiceListItemResponse;
 }
 
 const formatRupiah = (value: number | undefined) => {
@@ -34,7 +34,7 @@ export const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice }) => {
         try {
             setIsGenerating(true);
             const html = InvoicePdfFactory.generateHtml(invoice);
-            
+
             const { uri } = await Print.printToFileAsync({
                 html,
                 base64: false

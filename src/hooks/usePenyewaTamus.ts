@@ -11,15 +11,9 @@ import {
 import { synchronizePenyewaTamuCache } from "@/database/penyewaTamuSync";
 import { getConnectivityStatus } from "@/network/connectivity";
 import type { Tamu } from "@/types";
+import { getErrorMessage, isFresh } from "@/utils/helpers";
 
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
-
-const isFresh = (lastSyncedAt: string | null) =>
-    lastSyncedAt ? Date.now() - Date.parse(lastSyncedAt) < CACHE_FRESHNESS_MS : false;
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message || fallback;
 
 export function usePenyewaTamus() {
     const db = useSQLiteContext();
@@ -80,7 +74,7 @@ export function usePenyewaTamus() {
             try {
                 if (!force) {
                     const metadata = await getPenyewaTamuMetadata(db, targetScope);
-                    if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt))
+                    if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt, CACHE_FRESHNESS_MS))
                         return;
                 }
                 const status = await getConnectivityStatus();
@@ -93,12 +87,7 @@ export function usePenyewaTamus() {
                 if (status === "offline") {
                     if (!cacheUsable)
                         setError("Offline dan belum ada data TAMU tersimpan di perangkat.");
-                    else
-                        setNotice(
-                            showRefresh
-                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
-                                : "Offline. Menampilkan data TAMU yang tersimpan di perangkat.",
-                        );
+                    else setNotice(null);
                     return;
                 }
                 await synchronizePenyewaTamuCache(db, targetScope, force);

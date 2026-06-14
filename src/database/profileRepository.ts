@@ -1,6 +1,11 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import type { ProfileUser } from "@/types/profile";
+import {
+    normalizeNullableProfileKamarStatus,
+    normalizeNullableProfileSewaStatus,
+    type ProfileUser,
+} from "@/types/profile";
+import { parseProfileScope } from "@/database/profileScope";
 import type { UserRole } from "@/types";
 
 type MetadataRow = { last_synced_at: string; is_dirty: number };
@@ -24,16 +29,8 @@ type ProfileRow = {
 
 const profileResource = (scope: string) => `profile:${scope}`;
 
-function parseScope(scope: string): { role: UserRole; userId: number } {
-    const match = scope.match(/^(admin|penyewa):(\d+)$/);
-    const userId = match ? Number(match[2]) : Number.NaN;
-    if (!match || !Number.isInteger(userId) || userId < 1)
-        throw new Error("Scope profil tidak valid.");
-    return { role: match[1] as UserRole, userId };
-}
-
 function mapRowToProfile(row: ProfileRow): ProfileUser {
-    const scope = parseScope(row.scope_key);
+    const scope = parseProfileScope(row.scope_key);
     if (row.id_user !== scope.userId || row.role !== scope.role)
         throw new Error("Row profil tidak cocok dengan scope tersimpan.");
     return {
@@ -46,12 +43,18 @@ function mapRowToProfile(row: ProfileRow): ProfileUser {
         alamat_asal: row.alamat_asal,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        status_sewa: row.status_sewa,
+        status_sewa: normalizeNullableProfileSewaStatus(
+            row.status_sewa,
+            "cache.status_sewa",
+        ),
         kamar:
             row.nomor_kamar !== null || row.status_kamar !== null
                 ? {
                       nomor_kamar: row.nomor_kamar,
-                      status_kamar: row.status_kamar,
+                      status_kamar: normalizeNullableProfileKamarStatus(
+                          row.status_kamar,
+                          "cache.kamar.status_kamar",
+                      ),
                   }
                 : null,
         sewa:
@@ -61,14 +64,17 @@ function mapRowToProfile(row: ProfileRow): ProfileUser {
                 ? {
                       tanggal_masuk: row.tanggal_masuk,
                       tanggal_keluar: row.tanggal_keluar,
-                      status_sewa: row.status_sewa,
+                      status_sewa: normalizeNullableProfileSewaStatus(
+                          row.status_sewa,
+                          "cache.sewa.status_sewa",
+                      ),
                   }
                 : null,
     };
 }
 
 export function getProfileResourceName(scope: string): string {
-    parseScope(scope);
+    parseProfileScope(scope);
     return profileResource(scope);
 }
 
@@ -76,7 +82,7 @@ export async function getCachedProfile(
     db: SQLiteDatabase,
     scope: string,
 ): Promise<ProfileUser | null> {
-    parseScope(scope);
+    parseProfileScope(scope);
     const row = await db.getFirstAsync<ProfileRow>(
         `SELECT scope_key, id_user, role, nama_lengkap, email, no_hp, foto_profil,
                 alamat_asal, created_at, updated_at, status_sewa, nomor_kamar,
@@ -136,7 +142,7 @@ export async function publishProfileSnapshot(
     profile: ProfileUser,
     syncedAt: string,
 ): Promise<void> {
-    const parsedScope = parseScope(scope);
+    const parsedScope = parseProfileScope(scope);
     if (profile.id !== parsedScope.userId || profile.role !== parsedScope.role)
         throw new Error("Snapshot profil tidak cocok dengan scope publikasi.");
 

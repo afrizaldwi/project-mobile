@@ -5,6 +5,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Linking } from "react-native";
 
+import { formatRupiah } from "@/utils/format";
 import { apiClient } from "@/api/client";
 import { getKamarTersedia } from "@/api/kamarService";
 import { markKamarCacheDirty } from "@/database/kamarRepository";
@@ -212,12 +213,7 @@ export function useTambahPenghuni() {
     return availableRooms.find((room) => room.id_kamar === selectedId) ?? null;
   }, [availableRooms, kamar]);
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const formatCurrency = formatRupiah;
 
   const totalTagihan = useMemo(() => {
     const hargaPerBulan = Number(selectedRoom?.harga_bulanan) || 0;

@@ -1,55 +1,23 @@
-import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Keyboard,
     KeyboardAvoidingView,
     RefreshControl,
     ScrollView,
     Text,
-    TextInput,
     TouchableOpacity,
-    View
+    View,
 } from "react-native";
 
-import { profileService } from "@/api/profileService";
-import { useAuth } from "@/auth/AuthContext";
-import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
+import { PasswordChangeSection } from "@/components/profile/PasswordChangeSection";
 import { useProfile } from "@/hooks/useProfile";
-import { getConnectivityStatus } from "@/network/connectivity";
 import type { UserRole } from "@/types";
-import type {
-    PasswordChangePayload,
-} from "@/types/profile";
-
-type PasswordField = "current_password" | "password" | "password_confirmation";
-
-type PasswordForm = PasswordChangePayload;
-
-type PasswordErrors = Partial<Record<PasswordField, string>>;
-
-type ValidationErrorResponse = {
-    message?: string;
-    errors?: Partial<Record<PasswordField, string[]>>;
-};
 
 type ProfileScreenContentProps = {
     role: UserRole;
     title: string;
     subtitle: string;
-};
-
-const initialPasswordForm: PasswordForm = {
-    current_password: "",
-    password: "",
-    password_confirmation: "",
-};
-
-const passwordLabels: Record<PasswordField, string> = {
-    current_password: "Password saat ini",
-    password: "Password baru",
-    password_confirmation: "Konfirmasi password baru",
 };
 
 function roleLabel(role?: string | null) {
@@ -63,24 +31,6 @@ function valueOrDash(value: unknown) {
     return String(value);
 }
 
-function getFieldError(error: unknown): PasswordErrors {
-    const data = (error as { response?: { data?: ValidationErrorResponse } })?.response?.data;
-    const validationErrors = data?.errors;
-    if (!validationErrors) return {};
-
-    return Object.fromEntries(
-        Object.entries(validationErrors).map(([field, messages]) => [
-            field,
-            messages?.[0] || "Kolom ini tidak valid.",
-        ])
-    ) as PasswordErrors;
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-    const data = (error as { response?: { data?: ValidationErrorResponse } })?.response?.data;
-    return data?.message || (error instanceof Error ? error.message : null) || fallback;
-}
-
 function InfoRow({ label, value }: { label: string; value: unknown }) {
     return (
         <View className="border-b border-gray-100 py-3 last:border-b-0">
@@ -91,8 +41,6 @@ function InfoRow({ label, value }: { label: string; value: unknown }) {
 }
 
 export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenContentProps) {
-    const router = useRouter();
-    const { refreshUser } = useAuth();
     const {
         profile,
         loading,
@@ -100,13 +48,10 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
         notice,
         error,
         isPartial,
-        isOffline,
         refresh,
     } = useProfile(role);
-    const [passwordForm, setPasswordForm] = useState<PasswordForm>(initialPasswordForm);
-    const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
-    const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
-    const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
     const sewaRows = useMemo(() => {
         if (role !== "penyewa" || !profile) return [];
@@ -123,13 +68,8 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
             value: sewa?.status_sewa ?? profile.status_sewa ?? null,
         });
 
-        return rows.filter(
-            (row) => !isPartial || row.value !== null,
-        );
+        return rows.filter((row) => !isPartial || row.value !== null);
     }, [isPartial, profile, role]);
-
-    const scrollViewRef = useRef<ScrollView>(null);
-    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
     useEffect(() => {
         const showSub = Keyboard.addListener("keyboardDidShow", () => {
@@ -150,51 +90,6 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
         setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 250);
-    };
-
-    const updatePasswordField = (field: PasswordField, value: string) => {
-        setPasswordForm((current) => ({ ...current, [field]: value }));
-        setPasswordErrors((current) => ({ ...current, [field]: undefined }));
-        setPasswordMessage(null);
-    };
-
-    const handlePasswordSubmit = async () => {
-        try {
-            setIsSubmittingPassword(true);
-            setPasswordErrors({});
-            setPasswordMessage(null);
-
-            if ((await getConnectivityStatus()) === "offline") {
-                Alert.alert(
-                    "Koneksi Diperlukan",
-                    "Tindakan ini membutuhkan koneksi internet.",
-                );
-                return;
-            }
-
-            const response = await profileService.changePassword(passwordForm);
-            const message =
-                response.message || "Password berhasil diubah. Silakan masuk kembali.";
-
-            setPasswordForm(initialPasswordForm);
-            setPasswordMessage(message);
-            await deleteToken();
-            await deleteCachedUser();
-            await refreshUser();
-
-            Alert.alert("Password Berhasil Diubah", message, [
-                { text: "OK", onPress: () => router.replace("/login") },
-            ]);
-        } catch (error) {
-            const fieldErrors = getFieldError(error);
-            if (Object.keys(fieldErrors).length > 0) {
-                setPasswordErrors(fieldErrors);
-            } else {
-                setPasswordMessage(getErrorMessage(error, "Gagal mengubah password."));
-            }
-        } finally {
-            setIsSubmittingPassword(false);
-        }
     };
 
     return (
@@ -219,31 +114,44 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
                 <Text className="mt-1 text-sm text-gray-500">{subtitle}</Text>
 
                 {loading && !profile ? (
-                    <View className="mt-6 rounded-xl bg-white p-6 items-center">
+                    <View className="mt-6 items-center rounded-xl bg-white p-6">
                         <ActivityIndicator color="#2563eb" />
-                        <Text className="mt-3 text-sm font-semibold text-gray-500">Memuat profil...</Text>
+                        <Text className="mt-3 text-sm font-semibold text-gray-500">
+                            Memuat profil...
+                        </Text>
                     </View>
                 ) : error && !profile ? (
                     <View className="mt-6 rounded-xl border border-red-100 bg-red-50 p-4">
                         <Text className="text-sm font-semibold text-red-700">{error}</Text>
-                        <TouchableOpacity onPress={refresh} className="mt-3 rounded-lg bg-red-600 px-4 py-3">
-                            <Text className="text-center text-sm font-bold text-white">Coba Lagi</Text>
+                        <TouchableOpacity
+                            onPress={refresh}
+                            className="mt-3 rounded-lg bg-red-600 px-4 py-3"
+                        >
+                            <Text className="text-center text-sm font-bold text-white">
+                                Coba Lagi
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 ) : profile ? (
                     <>
                         {notice ? (
                             <View className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
-                                <Text className="text-sm font-semibold text-primary">{notice}</Text>
+                                <Text className="text-sm font-semibold text-primary">
+                                    {notice}
+                                </Text>
                             </View>
                         ) : null}
                         {error ? (
                             <View className="mt-6 rounded-xl border border-red-100 bg-red-50 p-4">
-                                <Text className="text-sm font-semibold text-red-700">{error}</Text>
+                                <Text className="text-sm font-semibold text-red-700">
+                                    {error}
+                                </Text>
                             </View>
                         ) : null}
-                        <View className="mt-6 rounded-xl bg-white p-5 shadow-sm border border-gray-100">
-                            <Text className="mb-2 text-lg font-bold text-dark">Informasi Akun</Text>
+                        <View className="mt-6 rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                            <Text className="mb-2 text-lg font-bold text-dark">
+                                Informasi Akun
+                            </Text>
                             <InfoRow label="Nama Lengkap" value={profile.nama_lengkap} />
                             <InfoRow label="Email" value={profile.email} />
                             <InfoRow label="Role" value={roleLabel(profile.role)} />
@@ -251,8 +159,10 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
                         </View>
 
                         {sewaRows.length > 0 ? (
-                            <View className="mt-4 rounded-xl bg-white p-5 shadow-sm border border-gray-100">
-                                <Text className="mb-2 text-lg font-bold text-dark">Informasi Sewa</Text>
+                            <View className="mt-4 rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                                <Text className="mb-2 text-lg font-bold text-dark">
+                                    Informasi Sewa
+                                </Text>
                                 {sewaRows.map((row) => (
                                     <InfoRow key={row.label} label={row.label} value={row.value} />
                                 ))}
@@ -261,57 +171,8 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
                     </>
                 ) : null}
 
-                <View className="mt-4 rounded-xl bg-white p-5 shadow-sm border border-gray-100">
-                    <Text className="text-lg font-bold text-dark">Ubah Password</Text>
-                    <Text className="mt-1 text-sm text-gray-500">
-                        Setelah berhasil, kamu perlu login ulang.
-                    </Text>
-                    {isOffline ? (
-                        <Text className="mt-2 text-sm font-semibold text-gray-500">
-                            Perubahan password memerlukan koneksi internet.
-                        </Text>
-                    ) : null}
-
-                    {(Object.keys(passwordLabels) as PasswordField[]).map((field) => (
-                        <View key={field} className="mt-4">
-                            <Text className="mb-2 text-xs font-bold uppercase text-gray-500">
-                                {passwordLabels[field]}
-                            </Text>
-                            <TextInput
-                                onFocus={scrollToPasswordForm}
-                                value={passwordForm[field]}
-                                onChangeText={(value) => updatePasswordField(field, value)}
-                                secureTextEntry
-                                editable={!isSubmittingPassword}
-                                className={`rounded-lg border px-4 py-3 text-dark ${passwordErrors[field] ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"
-                                    }`}
-                            />
-                            {passwordErrors[field] ? (
-                                <Text className="mt-1 text-xs font-semibold text-red-600">{passwordErrors[field]}</Text>
-                            ) : null}
-                        </View>
-                    ))}
-
-                    {passwordMessage ? (
-                        <View className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
-                            <Text className="text-sm font-semibold text-primary">{passwordMessage}</Text>
-                        </View>
-                    ) : null}
-
-                    <TouchableOpacity
-                        onPress={handlePasswordSubmit}
-                        disabled={isSubmittingPassword}
-                        className={`mt-5 rounded-lg px-4 py-3 ${isSubmittingPassword ? "bg-gray-300" : "bg-primary"}`}
-                    >
-                        {isSubmittingPassword ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text className="text-center text-sm font-bold text-white">Ubah Password</Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
+                <PasswordChangeSection onFieldFocus={scrollToPasswordForm} />
             </ScrollView>
         </KeyboardAvoidingView>
-
     );
 }

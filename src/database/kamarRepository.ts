@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import type { Kamar, KamarApiItem, KamarListParams, KamarListResponse, KamarStats } from "@/types/kamar";
+import type { Kamar, KamarListParams, KamarListResponse, KamarStats } from "@/types/kamar";
+import { escapeLike } from "@/database/database";
 
 const KAMAR_RESOURCE = "kamar";
 
@@ -8,10 +9,6 @@ type KamarCacheRow = Kamar;
 type CountRow = { count: number };
 type StatsRow = KamarStats;
 type SyncMetadataRow = { last_synced_at: string; is_dirty: number };
-
-function escapeLike(value: string): string {
-    return value.replace(/[\\%_]/g, "\\$&");
-}
 
 function mapRowToKamar(row: KamarCacheRow): Kamar {
     if (!/^\d+(?:\.\d+)?$/.test(row.harga_bulanan)) {
@@ -106,18 +103,25 @@ export async function clearKamarStaging(db: SQLiteDatabase): Promise<void> {
     await db.runAsync("DELETE FROM kamar_cache_staging");
 }
 
-export async function insertKamarStagingPage(db: SQLiteDatabase, items: KamarApiItem[]): Promise<void> {
+export async function insertKamarStagingPage(db: SQLiteDatabase, items: Kamar[]): Promise<void> {
+    if (items.length === 0) return;
     await db.withExclusiveTransactionAsync(async (txn) => {
+        const placeholders = items.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+        const values: (string | number | null)[] = [];
         for (const item of items) {
-            await txn.runAsync(
-                `INSERT INTO kamar_cache_staging (
-                    id_kamar, nomor_kamar, luas_kamar, fasilitas, harga_bulanan,
-                    status_kamar, foto_kamar, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            values.push(
                 item.id_kamar, item.nomor_kamar, item.luas_kamar, item.fasilitas,
-                item.harga_bulanan, item.status_kamar, item.foto_kamar, item.created_at, item.updated_at
+                item.harga_bulanan, item.status_kamar, item.foto_kamar,
+                item.created_at, item.updated_at,
             );
         }
+        await txn.runAsync(
+            `INSERT INTO kamar_cache_staging (
+                id_kamar, nomor_kamar, luas_kamar, fasilitas, harga_bulanan,
+                status_kamar, foto_kamar, created_at, updated_at
+            ) VALUES ${placeholders}`,
+            ...values,
+        );
     });
 }
 

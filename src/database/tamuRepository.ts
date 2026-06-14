@@ -1,11 +1,12 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import type { AdminTamuItem, AdminTamuListResponse, AdminTamuSummary } from "@/types/tamu";
+import type { Tamu } from "@/types";
+import type { AdminTamuListResponse, AdminTamuSummary } from "@/types/tamu";
 
 const TAMU_RESOURCE = "tamu";
 type CountRow = { count: number };
 type SyncMetadataRow = { last_synced_at: string; is_dirty: number };
-export type TamuStagingItem = AdminTamuItem & { visit_date_jakarta: string };
+export type TamuStagingItem = Tamu & { visit_date_jakarta: string };
 
 function escapeLike(value: string): string {
     return value.replace(/[\\%_]/g, "\\$&");
@@ -37,7 +38,7 @@ export async function getLocalTamuPage(
     const offset = (page - 1) * perPage;
     const filter = buildSearchFilter(params.search);
     const [rows, countRow, summaryRow] = await Promise.all([
-        db.getAllAsync<AdminTamuItem>(
+        db.getAllAsync<Tamu>(
             `SELECT id_tamu, nama_tamu, no_hp_tamu, keperluan, waktu_berkunjung,
                     id_user, nama_penghuni, nomor_kamar
              FROM tamu_cache ${filter.sql}

@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from "react-native";
-import { TagihanReminderItem } from "@/api/tagihanApi";
+import type { TagihanReminderItem } from "@/types/tagihan";
+import { formatRupiah } from "@/utils/formatters";
 
 interface PaymentUploadModalProps {
   visible: boolean;
@@ -15,13 +16,7 @@ interface PaymentUploadModalProps {
   onClose: () => void;
 }
 
-const formatRupiah = (value: string | number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-};
+
 
 const METODE_OPTIONS = ["Transfer Bank", "E-Wallet", "Cash"];
 
