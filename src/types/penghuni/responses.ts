@@ -56,4 +56,3 @@ export type Penghuni = {
     durasi_sewa_bulan: number;
     status_sewa: StatusSewa;
 };
-

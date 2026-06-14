@@ -14,4 +14,3 @@ export interface AdminPenghuniListParams {
 export interface GetAdminPenghuniOptions extends AdminPenghuniListParams {
     signal?: AbortSignal;
 }
-
