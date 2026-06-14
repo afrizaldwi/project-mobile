@@ -1,10 +1,10 @@
+import type { AdminTagihanStatus } from "@/api/tagihanApi";
 import type {
     AdminTagihanListResponse,
-    AdminTagihanStatus,
     AdminTagihanSummary,
     PendingPembayaranItem,
     TagihanReminderItem,
-} from "@/api/tagihanApi";
+} from "@/types/tagihan";
 import type { PaginationMeta } from "@/types/pagination";
 import type { SQLiteDatabase } from "expo-sqlite";
 

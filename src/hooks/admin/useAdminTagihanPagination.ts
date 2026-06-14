@@ -1,9 +1,9 @@
+import type { AdminTagihanStatus } from "@/api/tagihanApi";
 import type {
-  AdminTagihanStatus,
   AdminTagihanSummary,
   PendingPembayaranItem,
   TagihanReminderItem,
-} from "@/api/tagihanApi";
+} from "@/types/tagihan";
 import {
   ADMIN_PENDING_SCOPE,
   ADMIN_TAGIHAN_SCOPE,

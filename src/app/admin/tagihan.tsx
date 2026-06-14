@@ -13,12 +13,12 @@ import {
 } from "react-native";
 
 import { invoiceApi } from "@/api/invoice";
+import type { AdminTagihanStatus } from "@/api/tagihanApi";
 import type {
-  AdminTagihanStatus,
   NotifikasiItem,
   PendingPembayaranItem,
   TagihanReminderItem,
-} from "@/api/tagihanApi";
+} from "@/types/tagihan";
 import { tagihanApi } from "@/api/tagihanApi";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminNotificationModal } from "@/components/tagihan/admin/AdminNotificationModal";
