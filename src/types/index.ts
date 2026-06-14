@@ -1,26 +1,10 @@
-export type UserRole = "admin" | "penyewa";
-
-export type User = {
-    id: number;
-    nama_lengkap: string;
-    email: string;
-    role: UserRole;
-    noHp?: string;
-    no_hp?: string | null;
-    fotoProfil?: string | null;
-    foto_profil?: string | null;
-    alamatAsal?: string | null;
-    alamat_asal?: string | null;
-    createdAt?: string;
-    created_at?: string | null;
-    updatedAt?: string;
-    updated_at?: string | null;
-};
-
-export type LoginPayload = {
-    email: string;
-    password: string;
-};
+export type {
+    LoginPayload,
+    LoginResponse,
+    LoginUserResponse,
+    User,
+    UserRole,
+} from "@/types/auth";
 
 export interface Invoice {
     id: string;
@@ -63,14 +47,6 @@ export interface Transaksi {
     status: 'sukses' | 'gagal' | 'pending';
 }
 
-export type LoginResponse = {
-    message: string;
-    token?: string;
-    access_token?: string;
-    token_type?: string;
-    expires_in?: number;
-    user: User;
-};
 
 export type Keluhan = {
     id_keluhan: number;
@@ -97,80 +73,10 @@ export type Tamu = {
     nama_penghuni: string;
     nomor_kamar: string;
 }
-export type DashboardKeluhanStatus = "pending" | "proses" | "selesai";
-
-export type AdminDashboardSummary = {
-    cards: {
-        total_kamar: number;
-        penghuni_aktif: number;
-        tagihan_belum_dibayar: number;
-        pendapatan_bulan_ini: number;
-        keluhan_pending: number;
-    };
-    charts: {
-        status_kamar: {
-            tersedia: number;
-            terisi: number;
-            perbaikan: number;
-        };
-        status_tagihan: {
-            belum_bayar: number;
-            lunas: number;
-            telat: number;
-        };
-        status_keluhan: {
-            pending: number;
-            proses: number;
-            selesai: number;
-        };
-    };
-    recent_keluhan: {
-        judul: string;
-        status: DashboardKeluhanStatus;
-        tanggal: string;
-    }[];
-};
-
-export type PenyewaDashboardSummary = {
-    cards: {
-        kamar_saya: string;
-        tagihan_aktif: number;
-        status_pembayaran: string;
-        sisa_masa_sewa: string;
-        keluhan_saya: number;
-    };
-    kamar: {
-        nomor_kamar: string | null;
-        fasilitas: string | null;
-        harga_bulanan: number | null;
-        status_kamar: string | null;
-    } | null;
-    tagihan_terbaru: {
-        kode_invoice: string;
-        tanggal_jatuh_tempo: string;
-        total_tagihan: number;
-        status_tagihan: string;
-    } | null;
-    kontrak: {
-        tanggal_masuk: string;
-        tanggal_keluar: string | null;
-        durasi_sewa_bulan: number;
-        status_sewa: string;
-        progress_persen: number;
-        sisa_masa_sewa: string;
-    } | null;
-    keluhan_terakhir: {
-        judul: string;
-        status: DashboardKeluhanStatus;
-        tanggal: string;
-    }[];
-};
-
 export type {
     PasswordChangePayload,
     PasswordChangeResponse,
     ProfileKamar,
-    ProfileRole,
     ProfileResponse,
     ProfileSewa,
     ProfileUser,

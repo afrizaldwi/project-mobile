@@ -10,8 +10,10 @@ import {
     hasCachedProfileSnapshot,
     markProfileCacheDirty,
 } from "@/database/profileRepository";
+import { buildProfileScope } from "@/database/profileScope";
 import { synchronizeProfile } from "@/database/profileSync";
 import { getConnectivityStatus } from "@/network/connectivity";
+import { getApiErrorMessage } from "@/utils/apiErrors";
 import type { UserRole } from "@/types";
 import type { ProfileUser } from "@/types/profile";
 
@@ -19,10 +21,6 @@ const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
 
 const isFresh = (lastSyncedAt: string | null) =>
     lastSyncedAt ? Date.now() - Date.parse(lastSyncedAt) < CACHE_FRESHNESS_MS : false;
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message || (error instanceof Error ? error.message : null) || fallback;
 
 function buildPartialProfile(
     user: { id: number; nama_lengkap: string; email: string; role: UserRole } | null,
@@ -48,7 +46,7 @@ export function useProfile(expectedRole: UserRole) {
     const db = useSQLiteContext();
     const { user } = useAuth();
     const scope =
-        user && user.role === expectedRole ? `${user.role}:${user.id}` : null;
+        user && user.role === expectedRole ? buildProfileScope(user.role, user.id) : null;
     const [profile, setProfile] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -200,7 +198,7 @@ export function useProfile(expectedRole: UserRole) {
                 } else {
                     setNotice(null);
                     setError(
-                        getErrorMessage(syncError, "Profil belum tersedia dan sinkronisasi gagal."),
+                        getApiErrorMessage(syncError, "Profil belum tersedia dan sinkronisasi gagal."),
                     );
                 }
             } finally {
@@ -291,7 +289,7 @@ export function useProfile(expectedRole: UserRole) {
                     focusedRef.current &&
                     generation === generationRef.current
                 ) {
-                    setError(getErrorMessage(focusError, "Gagal menyiapkan profil."));
+                    setError(getApiErrorMessage(focusError, "Gagal menyiapkan profil."));
                     setLoading(false);
                 }
             });

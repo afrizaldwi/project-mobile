@@ -13,7 +13,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { syncPenyewaDashboard } from "@/database/dashboardSync";
 import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
-import type { PenyewaDashboardSummary } from "@/types";
+import type { PenyewaDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
 
 const formatRupiah = (value: number | null) => {
