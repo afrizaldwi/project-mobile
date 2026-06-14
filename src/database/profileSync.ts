@@ -7,6 +7,7 @@ import {
   markProfileCacheDirty,
   publishProfileSnapshot,
 } from "@/database/profileRepository";
+import { parseProfileScope } from "@/database/profileScope";
 import type { UserRole } from "@/types";
 import {
   normalizeNullableProfileKamarStatus,
@@ -20,14 +21,6 @@ import {
 } from "@/utils/apiErrors";
 
 const activeSyncs = new Map<string, Promise<void>>();
-
-function parseScope(scope: string): { role: UserRole; userId: number } {
-  const match = scope.match(/^(admin|penyewa):(\d+)$/);
-  const userId = match ? Number(match[2]) : Number.NaN;
-  if (!match || !Number.isInteger(userId) || userId < 1)
-    throw new Error("Scope profil tidak valid.");
-  return { role: match[1] as UserRole, userId };
-}
 
 function text(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -72,7 +65,7 @@ function normalizeProfileResponse(
   scope: string,
   expectedRole: UserRole,
 ): ProfileUser {
-  const { role, userId } = parseScope(scope);
+  const { role, userId } = parseProfileScope(scope);
   const user = response?.user;
 
   if (!user || typeof user !== "object") {
@@ -165,7 +158,7 @@ async function runProfileSync(
   scope: string,
   expectedRole: UserRole,
 ): Promise<void> {
-  const { userId, role } = parseScope(scope);
+  const { userId, role } = parseProfileScope(scope);
   try {
     const response = await profileService.getProfile();
     const normalized = normalizeProfileResponse(response, scope, expectedRole);

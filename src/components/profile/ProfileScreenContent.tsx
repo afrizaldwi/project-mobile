@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { profileService } from "@/api/profileService";
+import { getApiErrorMessage } from "@/api/errors";
 import { useAuth } from "@/auth/AuthContext";
 import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
 import { useProfile } from "@/hooks/useProfile";
@@ -74,11 +75,6 @@ function getFieldError(error: unknown): PasswordErrors {
             messages?.[0] || "Kolom ini tidak valid.",
         ])
     ) as PasswordErrors;
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-    const data = (error as { response?: { data?: ValidationErrorResponse } })?.response?.data;
-    return data?.message || (error instanceof Error ? error.message : null) || fallback;
 }
 
 function InfoRow({ label, value }: { label: string; value: unknown }) {
@@ -190,7 +186,7 @@ export function ProfileScreenContent({ role, title, subtitle }: ProfileScreenCon
             if (Object.keys(fieldErrors).length > 0) {
                 setPasswordErrors(fieldErrors);
             } else {
-                setPasswordMessage(getErrorMessage(error, "Gagal mengubah password."));
+                setPasswordMessage(getApiErrorMessage(error, "Gagal mengubah password."));
             }
         } finally {
             setIsSubmittingPassword(false);
