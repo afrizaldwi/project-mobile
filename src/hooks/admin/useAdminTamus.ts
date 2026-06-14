@@ -8,28 +8,18 @@ import { getLocalTamuPage, getTamuSyncMetadata, hasTamuCache, markTamuCacheDirty
 import { getJakartaToday, synchronizeTamuCache } from "@/database/tamuSync";
 import { getConnectivityStatus, type ConnectivityStatus } from "@/network/connectivity";
 import type { PaginationMeta } from "@/types/pagination";
-import type { AdminTamuItem, AdminTamuSummary } from "@/types/tamu";
+import type { Tamu } from "@/types";
+import type { AdminTamuSummary } from "@/types/tamu";
+import { getErrorMessage, getHttpStatus, isFresh } from "@/utils/helpers";
 
 const PAGE_SIZE = 20;
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
 const EMPTY_SUMMARY: AdminTamuSummary = { total_tamu: 0, total_penghuni_visited: 0, tamu_today: 0 };
 type LoadMode = "initial" | "refresh" | "soft";
 
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (error instanceof Error ? error.message : null) || fallback;
-}
-function getHttpStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } }).response?.status;
-}
-function isFresh(value: string | null): boolean {
-    const timestamp = value ? Date.parse(value) : Number.NaN;
-    return Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS;
-}
-
 export function useAdminTamus() {
     const db = useSQLiteContext();
-    const [tamus, setTamus] = useState<AdminTamuItem[]>([]);
+    const [tamus, setTamus] = useState<Tamu[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [summary, setSummary] = useState<AdminTamuSummary>(EMPTY_SUMMARY);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -94,7 +84,7 @@ export function useAdminTamus() {
         try {
             if (!force) {
                 const metadata = await getTamuSyncMetadata(db);
-                if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt)) return;
+                if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt, CACHE_FRESHNESS_MS)) return;
             }
             const networkStatus = await getConnectivityStatus();
             if (!mountedRef.current || !focusedRef.current) return;

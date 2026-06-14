@@ -4,6 +4,7 @@ import type {
     AdminTamuListParams,
     AdminTamuListResponse,
     GetAdminTamusOptions,
+    PenghuniAktif,
     PenyewaTamuListResponse,
 } from "@/types/tamu";
 
@@ -14,14 +15,7 @@ export interface CreateTamuPayload {
     nama_tamu: string;
     no_hp_tamu: string;
     keperluan: string;
-    id_user?: number; // Hanya diisi oleh Admin saat memilih penghuni
-}
-
-export interface PenghuniAktif {
-    id_user: number;
-    nama_penghuni: string;
-    email: string;
-    nomor_kamar: string;
+    id_user?: number; 
 }
 
 // ============================================================
