@@ -70,8 +70,8 @@ export function normalizeLaporanKeuangan(
     if (
         !object(value) ||
         !object(value.periode) ||
-        value.periode.bulan !== requestedBulan ||
-        value.periode.tahun !== requestedTahun ||
+        Number(value.periode.bulan) !== requestedBulan ||
+        Number(value.periode.tahun) !== requestedTahun ||
         !object(value.summary) ||
         !Array.isArray(value.pembayaran_terbaru) ||
         !Array.isArray(value.pengeluaran_terbaru)

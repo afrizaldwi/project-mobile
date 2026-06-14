@@ -10,7 +10,7 @@ import {
     View,
 } from "react-native";
 
-import { PenghuniCommand } from "@/api/penghuniService";
+import { PenghuniService } from "@/api/penghuniService";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { markPenghuniCacheDirty } from "@/database/penghuniRepository";
 import { synchronizePenghuniCache } from "@/database/penghuniSync";
@@ -71,7 +71,7 @@ export default function PerpanjangSewaScreen() {
 
         let isMounted = true;
 
-        PenghuniCommand.fetchDetail(idSewa)
+        PenghuniService.fetchDetail(idSewa)
             .then((data) => {
                 if (!isMounted) return;
                 setDetail(data);
@@ -135,7 +135,7 @@ export default function PerpanjangSewaScreen() {
         setLoading(true);
         try {
             const payload = builder.build();
-            const response = await PenghuniCommand.perpanjang(idSewa, payload);
+            const response = await PenghuniService.perpanjang(idSewa, payload);
             try {
                 await markPenghuniCacheDirty(db);
                 await synchronizePenghuniCache(db);
