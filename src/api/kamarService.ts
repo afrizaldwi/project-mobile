@@ -1,7 +1,6 @@
 import { apiClient } from "@/api/client";
 import type {
     Kamar,
-    KamarApiItem,
     KamarListParams,
     KamarListResponse,
     KamarPayload,
@@ -10,9 +9,10 @@ import type {
 } from "@/types/kamar";
 import type { PaginationMeta } from "@/types/pagination";
 import { normalizeStorageUrl } from "@/utils/storageUrl";
+import type { AxiosInstance } from "axios";
 
 type KamarListApiResponse = {
-    data: KamarApiItem[];
+    data: Kamar[];
     meta: PaginationMeta;
     total: number;
     tersedia: number;
@@ -21,16 +21,16 @@ type KamarListApiResponse = {
 };
 
 export type KamarSyncPageResponse = {
-    data: KamarApiItem[];
+    data: Kamar[];
     meta: PaginationMeta;
 };
 
 type KamarItemApiResponse = {
-    data: KamarApiItem;
+    data: Kamar;
 };
 
 type KamarTersediaApiResponse = {
-    data: KamarApiItem[];
+    data: Kamar[];
 };
 
 const KAMAR_PATH = "/admin/kamar";
@@ -63,7 +63,7 @@ function requireString(record: Record<string, unknown>, key: string): string {
     return value;
 }
 
-function parseKamarApiItem(value: unknown): KamarApiItem {
+function parseKamarItem(value: unknown): Kamar {
     if (!isRecord(value)) {
         throw new Error("Respons kamar tidak valid: item kamar harus berupa objek.");
     }
@@ -71,6 +71,11 @@ function parseKamarApiItem(value: unknown): KamarApiItem {
     const status = requireString(value, "status_kamar");
     if (!KAMAR_STATUSES.includes(status as KamarStatus)) {
         throw new Error("Respons kamar tidak valid: status_kamar tidak dikenal.");
+    }
+
+    const hargaBulanan = String((value as Record<string, unknown>).harga_bulanan ?? "");
+    if (!/^\d+(?:\.\d+)?$/.test(hargaBulanan)) {
+        throw new Error("Respons kamar tidak valid: harga_bulanan harus berupa angka desimal.");
     }
 
     const fotoKamar = value.foto_kamar;
@@ -82,7 +87,7 @@ function parseKamarApiItem(value: unknown): KamarApiItem {
         id_kamar: requireNumber(value, "id_kamar"),
         nomor_kamar: requireString(value, "nomor_kamar"),
         fasilitas: requireString(value, "fasilitas"),
-        harga_bulanan: requireString(value, "harga_bulanan"),
+        harga_bulanan: hargaBulanan,
         luas_kamar: requireString(value, "luas_kamar"),
         foto_kamar: fotoKamar,
         status_kamar: status as KamarStatus,
@@ -91,25 +96,11 @@ function parseKamarApiItem(value: unknown): KamarApiItem {
     };
 }
 
-function normalizeKamar(item: KamarApiItem): Kamar {
-    if (!/^\d+(?:\.\d+)?$/.test(item.harga_bulanan)) {
-        throw new Error("Respons kamar tidak valid: harga_bulanan harus berupa angka desimal.");
-    }
-    return item;
-}
-
 function parseKamarArray(value: unknown): Kamar[] {
     if (!Array.isArray(value)) {
         throw new Error("Respons kamar tidak valid: data harus berupa array.");
     }
-    return value.map((item) => normalizeKamar(parseKamarApiItem(item)));
-}
-
-function parseKamarApiArray(value: unknown): KamarApiItem[] {
-    if (!Array.isArray(value)) {
-        throw new Error("Respons kamar tidak valid: data harus berupa array.");
-    }
-    return value.map(parseKamarApiItem);
+    return value.map(parseKamarItem);
 }
 
 function parsePaginationMeta(value: unknown): PaginationMeta {
@@ -146,7 +137,7 @@ function parseKamarItemResponse(value: unknown): Kamar {
     if (!isRecord(value)) {
         throw new Error("Respons detail kamar tidak valid.");
     }
-    return normalizeKamar(parseKamarApiItem(value.data));
+    return parseKamarItem(value.data);
 }
 
 function mapToKamarTersedia(room: Kamar): KamarTersedia {
@@ -186,7 +177,7 @@ export async function getKamarSyncPage(
         throw new Error("Respons daftar kamar tidak valid.");
     }
     return {
-        data: parseKamarApiArray(response.data.data),
+        data: parseKamarArray(response.data.data),
         meta: parsePaginationMeta(response.data.meta),
     };
 }
@@ -246,23 +237,20 @@ export function getStatusBadge(status: KamarStatus) {
     }
 }
 
-export function formatHarga(harga: string): string {
-    const numericPrice = Number(harga);
-    if (!Number.isFinite(numericPrice)) return "-";
-    return new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0,
-    }).format(numericPrice);
+export { formatRupiah as formatHarga, formatTanggalLengkap as formatTanggal } from "@/utils/format";
+
+export function createKamarService(client: AxiosInstance = apiClient) {
+    return {
+        getKamarTersedia,
+        getKamarPage,
+        getKamarSyncPage,
+        getKamarById,
+        createKamar,
+        updateKamar,
+        deleteKamar,
+        getImageUrl,
+        getStatusBadge,
+    };
 }
 
-export function formatTanggal(iso: string): string {
-    if (!iso) return "-";
-    return new Date(iso).toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-}
+export const kamarService = createKamarService();

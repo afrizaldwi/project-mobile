@@ -1,12 +1,10 @@
 import {
-    Penghuni,
-    PerpanjangPayload,
     type AdminPenghuniListParams,
     type AdminPenghuniListResponse,
     type GetAdminPenghuniOptions,
-    type PerpanjangResponse,
 } from "@/types/penghuni";
 import { apiClient } from "./client";
+import type { AxiosInstance } from "axios";
 
 const ADMIN_PENGHUNI_PATH = "/admin/penghuni";
 
@@ -32,20 +30,12 @@ export async function finishAdminPenghuni(idSewa: number): Promise<string | unde
     return response.data.message;
 }
 
-export const PenghuniCommand = {
+export function createPenghuniService(client: AxiosInstance = apiClient) {
+    return {
+        getAdminPenghuniPage,
+        finishAdminPenghuni,
+    };
+}
 
-    fetchAktif: async (): Promise<Penghuni[]> => {
-        const res = await apiClient.get("/admin/sewa");
-        return res.data.data ?? [];
-    },
+export const penghuniService = createPenghuniService();
 
-    fetchDetail: async (id: number): Promise<Penghuni> => {
-        const res = await apiClient.get(`/admin/sewa/${id}`);
-        return res.data.data;
-    },
-
-    perpanjang: async (id: number, payload: PerpanjangPayload): Promise<PerpanjangResponse> => {
-        const res = await apiClient.patch<PerpanjangResponse>(`/admin/sewa/${id}/perpanjang`, payload);
-        return res.data;
-    },
-};

@@ -11,6 +11,7 @@ import {
     markKamarCacheDirty,
 } from "@/database/kamarRepository";
 import { synchronizeKamarCache } from "@/database/kamarSync";
+import { getErrorMessage, getHttpStatus } from "@/utils/apiErrors";
 import { getConnectivityStatus, type ConnectivityStatus } from "@/network/connectivity";
 import type { FilterStatus } from "@/components/kamar";
 import type { Kamar, KamarStats } from "@/types/kamar";
@@ -22,13 +23,6 @@ const EMPTY_STATS: KamarStats = { total: 0, tersedia: 0, terisi: 0, perbaikan: 0
 type Query = { search: string; status: FilterStatus };
 type FirstPageMode = "initial" | "refresh";
 
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (error instanceof Error ? error.message : null) || fallback;
-}
-function getHttpStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } }).response?.status;
-}
 function isFresh(lastSyncedAt: string | null): boolean {
     if (!lastSyncedAt) return false;
     const timestamp = Date.parse(lastSyncedAt);
@@ -188,9 +182,8 @@ export function useKamarLocalList(search: string, status: FilterStatus) {
     const removeDeletedAndRefresh = useCallback(async (id: number) => {
         await deleteCachedKamar(db, id);
         await markKamarCacheDirty(db);
-        if (mountedRef.current) await loadFirstPage("initial");
         await syncAndReload(true);
-    }, [db, loadFirstPage, syncAndReload]);
+    }, [db, syncAndReload]);
 
     return {
         items, meta, stats, initialLoading, refreshing, loadingMore, syncing, connectivity, lastSyncedAt, error, notice,

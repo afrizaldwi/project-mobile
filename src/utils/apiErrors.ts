@@ -21,6 +21,18 @@ export function isRecoverableApiAvailabilityError(error: unknown): boolean {
     return typeof status === "number" && status >= 500;
 }
 
+export function getErrorMessage(error: unknown, fallback: string): string {
+    return (
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (error instanceof Error ? error.message : null) ||
+        fallback
+    );
+}
+
+export function getHttpStatus(error: unknown): number | undefined {
+    return (error as { response?: { status?: number } }).response?.status;
+}
+
 export function getSafeErrorMessage(error: unknown): string {
     if (isAxiosError(error)) {
         if (typeof error.response?.status === "number") {

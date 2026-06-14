@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { deleteKamar } from "@/api/kamarService";
+import { getErrorMessage } from "@/utils/apiErrors";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
   DeleteModal,
@@ -24,17 +25,6 @@ import { useKamarLocalList } from "@/hooks/useKamarLocalList";
 import type { Kamar } from "@/types/kamar";
 
 type ViewStrategy = "grid" | "list";
-function getErrorMessage(
-  error: unknown,
-  fallback = "Gagal memuat data kamar.",
-): string {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-      ?.message ||
-    (error instanceof Error ? error.message : null) ||
-    fallback
-  );
-}
 
 export default function AdminKamarScreen() {
   const [searchInput, setSearchInput] = useState("");

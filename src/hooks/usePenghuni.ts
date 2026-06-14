@@ -13,6 +13,7 @@ import {
     type PenghuniLocalFilterStatus,
 } from "@/database/penghuniRepository";
 import { synchronizePenghuniCache } from "@/database/penghuniSync";
+import { getErrorMessage, getHttpStatus } from "@/utils/apiErrors";
 import {
     getConnectivityStatus,
     type ConnectivityStatus,
@@ -49,17 +50,6 @@ const STATUS_LABEL: Record<AdminPenghuniItemStatus, StatusPenghuni> = {
     selesai: "SELESAI",
     dibatalkan: "DIBATALKAN",
 };
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (
-        (error as { response?: { data?: { message?: string } } })?.response?.data
-            ?.message ||
-        (error instanceof Error ? error.message : null) ||
-        fallback
-    );
-}
-function getHttpStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } }).response?.status;
-}
 function isFresh(value: string | null): boolean {
     const timestamp = value ? Date.parse(value) : Number.NaN;
     return (

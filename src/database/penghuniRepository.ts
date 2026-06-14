@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import type { AdminPenghuniItem, AdminPenghuniItemStatus, AdminPenghuniListResponse } from "@/types/penghuni";
+import { escapeLike } from "@/database/database";
 
 const PENGHUNI_RESOURCE = "penghuni";
 type CountRow = { count: number };
@@ -14,8 +15,6 @@ type PenghuniCacheRow = {
     kamar_luas_kamar: string | null; kamar_foto_kamar: string | null; kamar_status_kamar: string | null;
 };
 export type PenghuniLocalFilterStatus = "aktif" | "selesai" | "all";
-
-function escapeLike(value: string): string { return value.replace(/[\\%_]/g, "\\$&"); }
 function buildFilter(params: { search?: string; status: PenghuniLocalFilterStatus }) {
     const clauses: string[] = [];
     const values: string[] = [];
@@ -60,8 +59,18 @@ export async function markPenghuniCacheDirty(db: SQLiteDatabase): Promise<void> 
 }
 export async function clearPenghuniStaging(db: SQLiteDatabase): Promise<void> { await db.runAsync("DELETE FROM penghuni_cache_staging"); }
 export async function insertPenghuniStagingPage(db: SQLiteDatabase, items: AdminPenghuniItem[]): Promise<void> {
+    if (items.length === 0) return;
     await db.withExclusiveTransactionAsync(async (txn) => {
-        for (const item of items) await txn.runAsync(`INSERT INTO penghuni_cache_staging (id_sewa, tanggal_masuk, tanggal_keluar, harga_deal, durasi_sewa_bulan, status_sewa, user_id, user_nama_lengkap, user_email, user_no_hp, user_alamat_asal, user_foto_profil, kamar_id, kamar_nomor_kamar, kamar_fasilitas, kamar_harga_bulanan, kamar_luas_kamar, kamar_foto_kamar, kamar_status_kamar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, item.id_sewa, item.tanggal_masuk, item.tanggal_keluar, item.harga_deal, item.durasi_sewa_bulan, item.status_sewa, item.user.id, item.user.nama_lengkap, item.user.email, item.user.no_hp, item.user.alamat_asal, item.user.foto_profil, item.kamar.id_kamar, item.kamar.nomor_kamar, item.kamar.fasilitas, item.kamar.harga_bulanan, item.kamar.luas_kamar, item.kamar.foto_kamar, item.kamar.status_kamar);
+        const cols = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        const placeholders = items.map(() => cols).join(", ");
+        const values: (string | number | null)[] = [];
+        for (const item of items) {
+            values.push(item.id_sewa, item.tanggal_masuk, item.tanggal_keluar, item.harga_deal, item.durasi_sewa_bulan, item.status_sewa, item.user.id, item.user.nama_lengkap, item.user.email, item.user.no_hp, item.user.alamat_asal, item.user.foto_profil, item.kamar.id_kamar, item.kamar.nomor_kamar, item.kamar.fasilitas, item.kamar.harga_bulanan, item.kamar.luas_kamar, item.kamar.foto_kamar, item.kamar.status_kamar);
+        }
+        await txn.runAsync(
+            `INSERT INTO penghuni_cache_staging (id_sewa, tanggal_masuk, tanggal_keluar, harga_deal, durasi_sewa_bulan, status_sewa, user_id, user_nama_lengkap, user_email, user_no_hp, user_alamat_asal, user_foto_profil, kamar_id, kamar_nomor_kamar, kamar_fasilitas, kamar_harga_bulanan, kamar_luas_kamar, kamar_foto_kamar, kamar_status_kamar) VALUES ${placeholders}`,
+            ...values,
+        );
     });
 }
 export async function getPenghuniStagingCount(db: SQLiteDatabase): Promise<number> { return (await db.getFirstAsync<CountRow>("SELECT COUNT(*) AS count FROM penghuni_cache_staging"))?.count ?? 0; }
