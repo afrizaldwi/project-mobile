@@ -43,6 +43,11 @@ export const invoiceApi = {
 
 async function downloadAndSharePdf(fullUrl: string, kodeInvoice: string) {
   const token = await getToken();
+
+  if (!token) {
+    throw new Error("Sesi login tidak ditemukan. Silakan login ulang.");
+  }
+
   const fileName = `${kodeInvoice || "invoice"}.pdf`;
 
   const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
@@ -159,17 +164,17 @@ export async function exportCsvToShare(invoices: InvoiceListItemResponse[]) {
   const fileName = `laporan-transaksi-${today}.csv`;
   const csvContent = buildCsvContent(invoices);
 
-  const FS = require("expo-file-system");
+  const dir =
+    FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
 
-  const dir: string =
-    FS.documentDirectory ?? FS.cacheDirectory ?? FS.temporaryDirectory ?? "";
+  if (!dir) {
+    throw new Error("Storage tidak tersedia");
+  }
 
-  if (!dir) throw new Error("Storage tidak tersedia");
+  const fileUri = dir + fileName;
 
-  const fileUri: string = dir + fileName;
-
-  await FS.writeAsStringAsync(fileUri, csvContent, {
-    encoding: "utf8",
+  await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    encoding: FileSystem.EncodingType.UTF8,
   });
 
   const canShare = await Sharing.isAvailableAsync();
