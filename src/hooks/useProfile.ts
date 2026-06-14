@@ -2,7 +2,6 @@ import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useRef, useState } from "react";
 
-import { getApiErrorMessage } from "@/api/errors";
 import { useAuth } from "@/auth/AuthContext";
 import { getCachedUser } from "@/auth/tokenStorage";
 import {
@@ -14,6 +13,7 @@ import {
 import { buildProfileScope } from "@/database/profileScope";
 import { synchronizeProfile } from "@/database/profileSync";
 import { getConnectivityStatus } from "@/network/connectivity";
+import { getApiErrorMessage } from "@/utils/apiErrors";
 import type { UserRole } from "@/types";
 import type { ProfileUser } from "@/types/profile";
 

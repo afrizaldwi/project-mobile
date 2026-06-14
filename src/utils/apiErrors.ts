@@ -1,5 +1,13 @@
 import { isAxiosError } from "axios";
 
+type ApiErrorResponse = {
+    response?: {
+        data?: {
+            message?: unknown;
+        };
+    };
+};
+
 export function isRecoverableApiAvailabilityError(error: unknown): boolean {
     if (!isAxiosError(error)) return false;
 
@@ -24,4 +32,17 @@ export function getSafeErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;
     return "Unknown error";
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+    const message = (error as ApiErrorResponse)?.response?.data?.message;
+    if (typeof message === "string" && message.length > 0) {
+        return message;
+    }
+
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallback;
 }

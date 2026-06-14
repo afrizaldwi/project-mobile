@@ -14,11 +14,11 @@ import {
 } from "react-native";
 
 import { profileService } from "@/api/profileService";
-import { getApiErrorMessage } from "@/api/errors";
 import { useAuth } from "@/auth/AuthContext";
 import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
 import { useProfile } from "@/hooks/useProfile";
 import { getConnectivityStatus } from "@/network/connectivity";
+import { getApiErrorMessage } from "@/utils/apiErrors";
 import type { UserRole } from "@/types";
 import type {
     PasswordChangePayload,
