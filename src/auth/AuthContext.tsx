@@ -40,12 +40,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const sessionAlertVisibleRef = useRef(false);
+    const initialRestoreCompletedRef = useRef(false);
+    const initialRestoreStartedRef = useRef(false);
+    const activeUserRef = useRef<User | null>(null);
+
+    const updateUser = useCallback((nextUser: User | null) => {
+        activeUserRef.current = nextUser;
+        setUser(nextUser);
+    }, []);
 
     useEffect(() => {
         setAuthSessionInactiveHandler((message) => {
+            const hadActiveUser = activeUserRef.current !== null;
+
             NotificationFacade.resetNotifiedNotifications();
-            setUser(null);
-            setIsLoading(false);
+            updateUser(null);
+
+            if (!initialRestoreCompletedRef.current || !hadActiveUser) {
+                return;
+            }
+
             router.replace("/login");
 
             if (sessionAlertVisibleRef.current) return;
@@ -62,7 +76,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
 
         return () => setAuthSessionInactiveHandler(null);
-    }, []);
+    }, [updateUser]);
 
     const refreshUser = useCallback(async () => {
         setIsLoading(true);
@@ -71,33 +85,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const token = await getToken();
 
             if (!token) {
-                setUser(null);
+                updateUser(null);
                 NotificationFacade.resetNotifiedNotifications();
                 return;
             }
 
             const currentUser = await authService.getCurrentUser();
-            setUser(currentUser);
+            updateUser(currentUser);
         } catch (error) {
             const status = getHttpStatus(error);
             if (status === 401 || status === 403) {
                 await deleteToken();
                 await deleteCachedUser();
-                setUser(null);
+                updateUser(null);
                 NotificationFacade.resetNotifiedNotifications();
                 return;
             }
 
-            setUser(await getCachedUser());
+            updateUser(await getCachedUser());
         } finally {
+            initialRestoreCompletedRef.current = true;
             setIsLoading(false);
         }
-    }, []);
+    }, [updateUser]);
 
     const login = useCallback(async (payload: LoginPayload) => {
         const loggedInUser = await authService.login(payload);
 
-        setUser(loggedInUser);
+        updateUser(loggedInUser);
         void NotificationFacade.checkAndNotifyForUser(loggedInUser.id).catch((error) => {
             if (__DEV__) {
                 console.warn("[AuthContext] Gagal menjalankan cek notifikasi setelah login:", error);
@@ -105,16 +120,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
 
         return loggedInUser;
-    }, []);
+    }, [updateUser]);
 
     const logout = useCallback(async () => {
         await authService.logout();
         NotificationFacade.resetNotifiedNotifications();
-        setUser(null);
-    }, []);
+        updateUser(null);
+    }, [updateUser]);
 
     useEffect(() => {
-        refreshUser();
+        if (initialRestoreStartedRef.current) {
+            return;
+        }
+
+        initialRestoreStartedRef.current = true;
+        void refreshUser();
     }, [refreshUser]);
 
     const value = useMemo<AuthContextValue>(
