@@ -6,10 +6,12 @@ import {
     clearDashboardStaging,
     insertDashboardStaging,
     markDashboardDirty,
-    normalizeAdminDashboard,
-    normalizePenyewaDashboard,
     publishDashboard,
 } from "@/database/dashboardRepository";
+import {
+    normalizeAdminDashboard,
+    normalizePenyewaDashboard,
+} from "@/database/dashboardSnapshot";
 import { withDatabaseSyncLock } from "@/database/databaseSyncLock";
 import {
     getSafeErrorMessage,
