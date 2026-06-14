@@ -83,15 +83,6 @@ export default function AdminLaporanScreen() {
                         <RefreshControl refreshing={isRefreshing} onRefresh={refresh} />
                     }
                 >
-                    {isOffline && (
-                        <View className="mx-6 mb-6 rounded-xl border border-warning/20 bg-warning/10 p-4 flex-row items-center gap-2">
-                            <Ionicons name="cloud-offline" size={20} color="#f59e0b" />
-                            <Text className="text-sm font-semibold text-warning flex-1">
-                                Mode Offline – Hanya Bisa Lihat Data
-                            </Text>
-                        </View>
-                    )}
-
                     {/* Controls Bar */}
                     <View className="mx-6 mb-6 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex-col gap-3">
                         <View className="flex-row gap-2 justify-between">

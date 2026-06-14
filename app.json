@@ -5,7 +5,7 @@
     "slug": "Kelompok-4-Mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/basecamp-splash.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "kelompok4mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,13 +13,12 @@
       "supportsTablet": true
     },
     "android": {
-      "usesCleartextTraffic": true,
       "jsEngine": "hermes",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/basecamp-splash.png",
-        "backgroundImage": "./assets/images/basecamp-splash.png",
-        "monochromeImage": "./assets/images/basecamp-splash.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -34,12 +33,12 @@
      [
         "expo-splash-screen",
         {
-          "image": "./assets/images/basecamp-splash.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 280,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "image": "./assets/images/basecamp-splash.png",
+            "image": "./assets/images/icon.png",
             "backgroundColor": "#ffffff"
           }
         }

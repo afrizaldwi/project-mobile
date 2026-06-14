@@ -50,7 +50,7 @@ export function useDashboardSnapshot<T extends DashboardSummary>(
             if (await getConnectivityStatus() === "offline") {
                 if (usable) {
                     setError("");
-                    setNotice("Offline. Menampilkan dashboard yang tersimpan di perangkat.");
+                    setNotice("");
                 } else {
                     setNotice("");
                     setError(

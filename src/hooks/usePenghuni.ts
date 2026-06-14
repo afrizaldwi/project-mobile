@@ -212,12 +212,7 @@ export function usePenghuni() {
                         setError(
                             "Offline dan belum ada data PENGHUNI tersimpan di perangkat.",
                         );
-                    else
-                        setNotice(
-                            showRefresh
-                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
-                                : "Offline. Menampilkan data PENGHUNI yang tersimpan di perangkat.",
-                        );
+                    else setNotice(null);
                     return;
                 }
                 generationRef.current += 1;

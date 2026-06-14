@@ -87,12 +87,7 @@ export function usePenyewaTamus() {
                 if (status === "offline") {
                     if (!cacheUsable)
                         setError("Offline dan belum ada data TAMU tersimpan di perangkat.");
-                    else
-                        setNotice(
-                            showRefresh
-                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
-                                : "Offline. Menampilkan data TAMU yang tersimpan di perangkat.",
-                        );
+                    else setNotice(null);
                     return;
                 }
                 await synchronizePenyewaTamuCache(db, targetScope, force);

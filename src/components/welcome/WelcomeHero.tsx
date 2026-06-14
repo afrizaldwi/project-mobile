@@ -1,6 +1,6 @@
 import { Image, Text, View } from "react-native";
 
-const basecampLogo = require("../../../assets/images/basecamp-splash.png");
+const basecampLogo = require("../../../assets/images/icon.png");
 
 export function WelcomeHero() {
     return (

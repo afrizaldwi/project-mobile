@@ -91,7 +91,7 @@ export function useAdminTamus() {
             setConnectivity(networkStatus);
             if (networkStatus === "offline") {
                 if (!cacheUsable) setError("Offline dan belum ada data TAMU tersimpan di perangkat.");
-                else setNotice("Offline. Menampilkan data TAMU yang tersimpan di perangkat.");
+                else setNotice(null);
                 return;
             }
             setSyncing(true);

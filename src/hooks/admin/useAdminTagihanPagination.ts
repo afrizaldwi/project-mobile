@@ -95,9 +95,7 @@ function useLocal<T>(
         }
         if ((await getConnectivityStatus()) === "offline") {
           if (usable)
-            setNotice(
-              "Offline. Menampilkan data TAGIHAN yang tersimpan di perangkat.",
-            );
+            setNotice(null);
           else
             setError(
               "Offline dan belum ada data TAGIHAN tersimpan di perangkat.",

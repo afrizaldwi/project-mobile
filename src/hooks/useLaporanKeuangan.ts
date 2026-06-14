@@ -165,9 +165,7 @@ export function useLaporanKeuangan() {
                     if (generation.current !== token) return;
                     if (usable) {
                         setErrorMessage("");
-                        setNotice(
-                            "Offline. Menampilkan laporan keuangan yang tersimpan di perangkat.",
-                        );
+                        setNotice("");
                     } else {
                         setNotice("");
                         setErrorMessage(

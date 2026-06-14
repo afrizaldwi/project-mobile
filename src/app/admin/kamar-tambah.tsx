@@ -20,6 +20,7 @@ import { markKamarCacheDirty } from "@/database/kamarRepository";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
 import { KAMAR_STATUS_OPTIONS } from "@/types/kamar";
+import { requireOnlineAction } from "@/utils/offlineUi";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
 
 export default function KamarTambahScreen() {
@@ -64,6 +65,7 @@ export default function KamarTambahScreen() {
             Alert.alert("Validasi", "Harga harus berupa angka yang valid.");
             return;
         }
+        if (!(await requireOnlineAction())) return;
 
         Alert.alert(
             "Konfirmasi",
@@ -73,6 +75,8 @@ export default function KamarTambahScreen() {
                 {
                     text: "Tambah",
                     onPress: async () => {
+                        if (!(await requireOnlineAction())) return;
+
                         const payload: KamarPayload = {
                             nomor_kamar: nomorKamar.trim(),
                             luas_kamar: luasKamar.trim(),

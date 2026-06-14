@@ -91,15 +91,6 @@ export default function AdminPenghuniScreen() {
                     )}
                 </View>
 
-                {isOffline && (
-                    <View className="mx-6 mt-4 rounded-xl border border-warning/20 bg-warning/10 p-4 flex-row items-center gap-2">
-                        <Ionicons name="cloud-offline" size={20} color="#f59e0b" />
-                        <Text className="text-sm font-semibold text-warning flex-1">
-                            Mode Offline – Hanya Bisa Lihat Data
-                        </Text>
-                    </View>
-                )}
-
                 {/* Filter & Search */}
                 <PenghuniSearchFilter
                     activeTab={activeTab}

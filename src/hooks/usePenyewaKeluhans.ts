@@ -86,12 +86,7 @@ export function usePenyewaKeluhans() {
                 if (status === "offline") {
                     if (!cacheUsable)
                         setError("Offline dan belum ada data KELUHAN tersimpan di perangkat.");
-                    else
-                        setNotice(
-                            showRefresh
-                                ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan."
-                                : "Offline. Menampilkan data KELUHAN yang tersimpan di perangkat.",
-                        );
+                    else setNotice(null);
                     return;
                 }
                 await synchronizePenyewaKeluhanCache(db, targetScope, force);

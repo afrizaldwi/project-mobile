@@ -30,7 +30,12 @@ export interface TagihanReminderItem {
   tanggal_tagihan: string;
   tanggal_jatuh_tempo: string;
   total_tagihan: string;
-  status_tagihan: "belum_bayar" | "pending" | "telat" | "lunas" | "dibatalkan";
+  status_tagihan:
+    | "belum_bayar"
+    | "pending"
+    | "telat"
+    | "lunas"
+    | "dibatalkan";
   pembayaran_terbaru?: PembayaranTerbaru | null;
   penyewa: {
     id: number | null;
@@ -89,6 +94,28 @@ export interface NotifikasiItem {
   judul: string;
   pesan: string;
   is_read: boolean;
+  last_reminded_at: string | null;
+  reminder_count: number;
   created_at: string;
   tagihan: TagihanReminderItem | null;
+}
+
+export interface PaymentReviewRequest {
+  catatan_admin: string | null;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface UploadPaymentProofResponse extends MessageResponse {
+  data: TagihanReminderItem;
+}
+
+export interface PaymentReviewResponse extends MessageResponse {
+  data: PendingPembayaranItem;
+}
+
+export interface DueDateCheckResponse extends MessageResponse {
+  created_notifications: number;
 }

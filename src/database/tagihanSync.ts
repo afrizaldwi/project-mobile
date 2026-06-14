@@ -162,11 +162,18 @@ async function paged(db: SQLiteDatabase, kind: "tagihan" | "pending") {
           if (kind === "tagihan") item(x as TagihanReminderItem);
           else pending(x as PendingPembayaranItem);
         } catch (err) {
+          const candidate = x as {
+            id_tagihan?: number;
+            id_pembayaran?: number;
+          };
+          const diagnosticId =
+            candidate.id_tagihan ??
+            candidate.id_pembayaran ??
+            "unknown";
+
           if (__DEV__)
             console.error(
-              `[SYNC DIAGNOSTIC] Item validation failed. Kind: ${kind}, Item ID: ${
-                (x as any)?.id_tagihan || (x as any)?.id_pembayaran
-              }`,
+              `[SYNC DIAGNOSTIC] Item validation failed. Kind: ${kind}, Item ID: ${diagnosticId}`,
               err,
             );
           throw err;

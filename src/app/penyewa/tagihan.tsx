@@ -77,10 +77,7 @@ export default function PenyewaTagihanScreen() {
             setErrorMessage(
               "Offline dan belum ada tagihan tersimpan di perangkat.",
             );
-          else
-            setErrorMessage(
-              "Offline. Menampilkan tagihan yang tersimpan di perangkat.",
-            );
+          else setErrorMessage("");
           return;
         }
         await syncPenyewaTagihan(db, scope, force);

@@ -107,7 +107,7 @@ export function useKamarLocalList(search: string, status: FilterStatus) {
             if (!mountedRef.current || !focusedRef.current) return;
             setConnectivity(networkStatus);
             if (networkStatus === "offline") {
-                setNotice("Offline. Menampilkan data kamar yang tersimpan di perangkat.");
+                setNotice(null);
                 return;
             }
 

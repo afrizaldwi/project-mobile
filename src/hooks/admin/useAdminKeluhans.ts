@@ -42,7 +42,7 @@ export function useAdminKeluhans() {
         try {
             if (!force) { const metadata = await getKeluhanSyncMetadata(db); if (cacheUsable && !metadata.isDirty && isFresh(metadata.lastSyncedAt, CACHE_FRESHNESS_MS)) return; }
             const status = await getConnectivityStatus(); if (!mountedRef.current || !focusedRef.current) return; setConnectivity(status);
-            if (status === "offline") { if (!cacheUsable) setError("Offline dan belum ada data KELUHAN tersimpan di perangkat."); else setNotice(showRefresh ? "Penyegaran membutuhkan koneksi internet. Cache lama tetap ditampilkan." : "Offline. Menampilkan data KELUHAN yang tersimpan di perangkat."); return; }
+            if (status === "offline") { if (!cacheUsable) setError("Offline dan belum ada data KELUHAN tersimpan di perangkat."); else setNotice(null); return; }
             generationRef.current += 1; loadingMoreRef.current = false; requestedPageRef.current = null; setLoadingMore(false); setSyncing(true);
             await synchronizeKeluhanCache(db, force); if (!mountedRef.current || !focusedRef.current) return; setConnectivity("online"); setNotice(null); await loadFirstPage(true);
         } catch (syncError) {

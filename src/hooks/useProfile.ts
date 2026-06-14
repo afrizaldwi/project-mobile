@@ -160,7 +160,7 @@ export function useProfile(expectedRole: UserRole) {
                 setIsOffline(status === "offline");
                 if (status === "offline") {
                     if (hasFullSnapshot) {
-                        setNotice("Offline. Menampilkan profil yang tersimpan di perangkat.");
+                        setNotice(null);
                         setError(null);
                     } else if (hasPartialFallback) {
                         setNotice(
