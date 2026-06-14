@@ -51,9 +51,9 @@ function useLocal<T>(
     more = useRef(false);
   useEffect(() => {
     mounted.current = true;
+
     return () => {
       mounted.current = false;
-      gen.current++;
     };
   }, []);
   const load = useCallback(

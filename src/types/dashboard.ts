@@ -73,7 +73,7 @@ export type PenyewaDashboardCards = {
 export type PenyewaDashboardKamarResponse = {
     nomor_kamar: string | null;
     fasilitas: string | null;
-    harga_bulanan: string | number | null;
+    harga_bulanan: string | null;
     status_kamar: DashboardKamarStatus | null;
 };
 
@@ -87,7 +87,7 @@ export type PenyewaDashboardKamar = Omit<
 export type PenyewaDashboardTagihanResponse = {
     kode_invoice: string;
     tanggal_jatuh_tempo: string;
-    total_tagihan: string | number;
+    total_tagihan: string;
     status_tagihan: DashboardTagihanStatus;
 };
 
