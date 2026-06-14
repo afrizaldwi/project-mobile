@@ -1,6 +1,11 @@
 import type { KamarStatus } from "@/types/kamar";
 import type { PaginationMeta } from "@/types/pagination";
 
+/**
+ * Tipe data response dari API Server untuk fitur Data Penghuni.
+ * Berisi representasi read-only data dari database server.
+ */
+
 export type StatusSewa = "aktif" | "selesai";
 export type AdminPenghuniItemStatus = StatusSewa | "dibatalkan";
 export type AdminPenghuniApiStatus = AdminPenghuniItemStatus | "all";
@@ -27,19 +32,8 @@ export interface AdminPenghuniItem {
         harga_bulanan: string | null;
         luas_kamar: string | null;
         foto_kamar: string | null;
-        status_kamar: KamarStatus | string | null;
+        status_kamar: KamarStatus | null;
     };
-}
-
-export interface AdminPenghuniListParams {
-    page?: number;
-    per_page?: number;
-    search?: string;
-    status?: AdminPenghuniApiStatus;
-}
-
-export interface GetAdminPenghuniOptions extends AdminPenghuniListParams {
-    signal?: AbortSignal;
 }
 
 export interface AdminPenghuniListResponse {
@@ -63,4 +57,3 @@ export type Penghuni = {
     status_sewa: StatusSewa;
 };
 
-export type { PerpanjangPayload, PerpanjangResponse } from "@/types/sewa";

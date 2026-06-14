@@ -10,13 +10,13 @@ import {
 } from "react-native";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useLaporanKeuangan } from "@/hooks/useLaporanKeuangan";
-
-// Import extracted components
+import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { FormTambahPengeluaran } from "@/components/laporan/FormTambahPengeluaran";
 import { LaporanFilterModal } from "@/components/laporan/LaporanFilterModal";
 import { LaporanSummaryCards } from "@/components/laporan/LaporanSummaryCards";
 import { LaporanTables } from "@/components/laporan/LaporanTables";
+import { useLaporanKeuangan } from "@/hooks/useLaporanKeuangan";
+import { formatCurrency } from "@/utils/formatUtils";
 
 export default function AdminLaporanScreen() {
     const {
@@ -28,6 +28,7 @@ export default function AdminLaporanScreen() {
         isLoading,
         isRefreshing,
         isSubmitting,
+        isDeleting,
         showExpenseForm,
         setShowExpenseForm,
         errorMessage,
@@ -36,15 +37,15 @@ export default function AdminLaporanScreen() {
         form,
         setForm,
         handleSubmitExpense,
-        handleDeleteExpense,
-        formatCurrency,
+        deleteConfirm,
+        requestDeleteExpense,
+        confirmDeleteExpense,
+        cancelDeleteExpense,
         refresh,
+        isOffline,
     } = useLaporanKeuangan();
 
-    // Table active tab state
     const [activeTableTab, setActiveTableTab] = useState<"pengeluaran" | "pembayaran">("pengeluaran");
-
-    // Unified filter modal state
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
     const activeMonthLabel = monthOptions.find((m) => m.value === bulan)?.label || "";
@@ -59,13 +60,13 @@ export default function AdminLaporanScreen() {
     };
 
     const handleFormChange = (field: string, value: string) => {
-        setForm(prev => ({ ...prev, [field]: value }));
+        setForm((prev) => ({ ...prev, [field]: value }));
     };
 
     return (
         <ProtectedRoute allowedRoles={["admin"]}>
             <View className="flex-1 bg-light">
-                {/* Header Section */}
+                {/* Header */}
                 <View className="bg-white px-6 pt-6 pb-4 shadow-sm border-b border-gray-100 z-10">
                     <Text className="text-2xl font-black text-dark">Laporan Keuangan</Text>
                     <Text className="text-sm font-medium text-gray-500 mt-1">
@@ -73,22 +74,27 @@ export default function AdminLaporanScreen() {
                     </Text>
                 </View>
 
-                {/* Main Content Scroll Container */}
+                {/* Konten Utama */}
                 <ScrollView
                     className="flex-1"
                     contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl
-                            refreshing={isRefreshing}
-                            onRefresh={refresh}
-                        />
+                        <RefreshControl refreshing={isRefreshing} onRefresh={refresh} />
                     }
                 >
+                    {isOffline && (
+                        <View className="mx-6 mb-6 rounded-xl border border-warning/20 bg-warning/10 p-4 flex-row items-center gap-2">
+                            <Ionicons name="cloud-offline" size={20} color="#f59e0b" />
+                            <Text className="text-sm font-semibold text-warning flex-1">
+                                Mode Offline – Hanya Bisa Lihat Data
+                            </Text>
+                        </View>
+                    )}
+
                     {/* Controls Bar */}
                     <View className="mx-6 mb-6 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex-col gap-3">
                         <View className="flex-row gap-2 justify-between">
-                            {/* Month Dropdown Button */}
                             <TouchableOpacity
                                 onPress={() => setIsFilterModalOpen(true)}
                                 className="flex-1 flex-row items-center justify-between border border-gray-200 rounded-xl px-4 py-3 bg-white"
@@ -96,8 +102,6 @@ export default function AdminLaporanScreen() {
                                 <Text className="text-sm font-bold text-dark">{activeMonthLabel}</Text>
                                 <Ionicons name="chevron-down" size={16} color="#4b5563" />
                             </TouchableOpacity>
-
-                            {/* Year Dropdown Button */}
                             <TouchableOpacity
                                 onPress={() => setIsFilterModalOpen(true)}
                                 className="flex-1 flex-row items-center justify-between border border-gray-200 rounded-xl px-4 py-3 bg-white"
@@ -107,18 +111,22 @@ export default function AdminLaporanScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <View className="flex-row gap-2">
-                            {/* Catat Pengeluaran Button */}
-                            <TouchableOpacity
-                                onPress={() => setShowExpenseForm((prev) => !prev)}
-                                className="flex-[1.5] bg-primary py-3 rounded-xl flex-row items-center justify-center shadow-md shadow-primary/20 active:bg-accent"
-                            >
-                                <Ionicons name="add" size={18} color="white" />
-                                <Text className="text-white font-black text-sm ml-1">+ Catat Pengeluaran</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {!isOffline && (
+                            <View className="flex-row gap-2">
+                                <TouchableOpacity
+                                    onPress={() => setShowExpenseForm((prev) => !prev)}
+                                    className="flex-[1.5] bg-primary py-3 rounded-xl flex-row items-center justify-center shadow-md shadow-primary/20 active:bg-accent"
+                                >
+                                    <Ionicons name="add" size={18} color="white" />
+                                    <Text className="text-white font-black text-sm ml-1">
+                                        + Catat Pengeluaran
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
 
+                    {/* Error & Notice */}
                     {errorMessage ? (
                         <View className="mx-6 mb-6 rounded-xl border border-danger/20 bg-danger/10 p-4">
                             <Text className="text-sm font-semibold text-danger">{errorMessage}</Text>
@@ -130,15 +138,16 @@ export default function AdminLaporanScreen() {
                         </View>
                     ) : null}
 
-                    {/* Loading Indicator */}
+                    {/* Loading */}
                     {isLoading && !data ? (
                         <View className="py-20 justify-center items-center">
                             <ActivityIndicator size="large" color="#2563eb" />
-                            <Text className="text-gray-500 mt-3 font-semibold">Memuat data laporan...</Text>
+                            <Text className="text-gray-500 mt-3 font-semibold">
+                                Memuat data laporan...
+                            </Text>
                         </View>
                     ) : (
                         <>
-                            {/* Summary Cards */}
                             <LaporanSummaryCards
                                 totalPemasukan={summary?.total_pemasukan ?? 0}
                                 totalPengeluaran={summary?.total_pengeluaran ?? 0}
@@ -146,36 +155,66 @@ export default function AdminLaporanScreen() {
                                 formatCurrency={formatCurrency}
                             />
 
-                            {/* + Catatan Pengeluaran Baru Form */}
-                            <FormTambahPengeluaran
-                                isCollapsed={!showExpenseForm}
-                                setIsCollapsed={(val: boolean) => setShowExpenseForm(!val)}
-                                form={form}
-                                onChangeForm={handleFormChange}
-                                onSubmit={handleSubmitExpense}
-                                isSubmitting={isSubmitting}
-                            />
+                            {!isOffline && (
+                                <FormTambahPengeluaran
+                                    isCollapsed={!showExpenseForm}
+                                    setIsCollapsed={(val: boolean) => setShowExpenseForm(!val)}
+                                    form={form}
+                                    onChangeForm={handleFormChange}
+                                    onSubmit={handleSubmitExpense}
+                                    isSubmitting={isSubmitting}
+                                />
+                            )}
 
-                            {/* Tables containing expenses and payments */}
+                            {/* LaporanTables meneruskan info hapus ke sini — bukan Alert langsung */}
                             <LaporanTables
                                 activeTab={activeTableTab}
                                 setActiveTab={setActiveTableTab}
                                 pengeluaranList={pengeluaran}
                                 pembayaranList={pembayaran}
-                                onDeletePengeluaran={handleDeleteExpense}
+                                onDeletePengeluaran={requestDeleteExpense}
                                 formatCurrency={formatCurrency}
+                                isOffline={isOffline}
                             />
                         </>
                     )}
                 </ScrollView>
 
-                {/* Combined Filter Selection Modal */}
+                {/* Filter Modal */}
                 <LaporanFilterModal
                     visible={isFilterModalOpen}
                     onClose={() => setIsFilterModalOpen(false)}
                     selectedBulan={bulan}
                     selectedTahun={tahun}
                     onApply={handleApplyFilter}
+                />
+
+                {/* Modal Konfirmasi Hapus Pengeluaran (Poin 8) */}
+                <ConfirmationModal
+                    visible={deleteConfirm.visible}
+                    title="Hapus Pengeluaran"
+                    description="Apakah Anda yakin ingin menghapus catatan pengeluaran ini? Tindakan ini tidak dapat dibatalkan."
+                    confirmLabel="Ya, Hapus"
+                    confirmVariant="danger"
+                    isLoading={isDeleting}
+                    dataPreview={[
+                        {
+                            label: "Judul",
+                            value: deleteConfirm.judulPengeluaran || "-",
+                        },
+                        {
+                            label: "Nominal",
+                            value: deleteConfirm.jumlahPengeluaran
+                                ? formatCurrency(deleteConfirm.jumlahPengeluaran)
+                                : "-",
+                        },
+                        {
+                            label: "Tanggal",
+                            value: deleteConfirm.tanggalPengeluaran || "-",
+                        },
+                    ]}
+                    onConfirm={confirmDeleteExpense}
+                    onCancel={cancelDeleteExpense}
                 />
             </View>
         </ProtectedRoute>
