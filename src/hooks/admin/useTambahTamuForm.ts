@@ -53,7 +53,7 @@ export function useTambahTamuForm() {
         }
         setIsSubmitting(true);
         try {
-            await tamuService.createAdminTamu({ nama_tamu: nama, no_hp_tamu: noHp, keperluan, id_user: idUser });
+            await tamuService.createAdminTamu({ nama_tamu: nama, no_hp_tamu: noHp, keperluan, id_user: idUser ?? undefined });
             try {
                 await markTamuCacheDirty(db);
             } catch (cacheError) {
