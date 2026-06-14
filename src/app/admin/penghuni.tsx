@@ -15,7 +15,6 @@ import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { PenghuniCard } from "@/components/penghuni/PenghuniCard";
 import { PenghuniSearchFilter } from "@/components/penghuni/PenghuniSearchFilter";
 import {
-    type Penghuni,
     type PenghuniFilterStatus,
     type PenghuniViewModel,
     usePenghuni,

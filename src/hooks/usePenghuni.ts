@@ -13,7 +13,6 @@ import {
     type PenghuniLocalFilterStatus,
 } from "@/database/penghuniRepository";
 import { synchronizePenghuniCache } from "@/database/penghuniSync";
-import { getErrorMessage, getHttpStatus } from "@/utils/apiErrors";
 import {
     getConnectivityStatus,
     type ConnectivityStatus,

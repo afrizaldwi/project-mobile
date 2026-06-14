@@ -1,5 +1,5 @@
 import React from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 
 import { PenghuniPickerModal } from "@/components/admin/tamu/PenghuniPickerModal";
 import { TambahTamuForm } from "@/components/admin/tamu/TambahTamuForm";
