@@ -3,6 +3,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
+import { getErrorMessage, getHttpStatus } from "@/utils/apiErrors";
 import { keluhanService } from "@/api/keluhanService";
 import { getKeluhanSyncMetadata, getLocalKeluhanPage, hasKeluhanSnapshot, markKeluhanCacheDirty } from "@/database/keluhanRepository";
 import { synchronizeKeluhanCache } from "@/database/keluhanSync";
@@ -14,8 +15,6 @@ import type { PaginationMeta } from "@/types/pagination";
 export type KeluhanFilterStatus = AdminKeluhanStatus;
 const PAGE_SIZE = 20;
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
-function getErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || (error instanceof Error ? error.message : null) || fallback; }
-function getHttpStatus(error: unknown): number | undefined { return (error as { response?: { status?: number } }).response?.status; }
 function getSyncErrorMessage(error: unknown, fallback: string): string { return (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback; }
 function isFresh(value: string | null): boolean { const timestamp = value ? Date.parse(value) : Number.NaN; return Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS; }
 

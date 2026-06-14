@@ -6,6 +6,7 @@ import { Alert } from "react-native";
 import { tamuService } from "@/api/tamuService";
 import { getLocalTamuPage, getTamuSyncMetadata, hasTamuCache, markTamuCacheDirty } from "@/database/tamuRepository";
 import { getJakartaToday, synchronizeTamuCache } from "@/database/tamuSync";
+import { getErrorMessage, getHttpStatus } from "@/utils/apiErrors";
 import { getConnectivityStatus, type ConnectivityStatus } from "@/network/connectivity";
 import type { PaginationMeta } from "@/types/pagination";
 import type { AdminTamuItem, AdminTamuSummary } from "@/types/tamu";
@@ -14,14 +15,6 @@ const PAGE_SIZE = 20;
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
 const EMPTY_SUMMARY: AdminTamuSummary = { total_tamu: 0, total_penghuni_visited: 0, tamu_today: 0 };
 type LoadMode = "initial" | "refresh" | "soft";
-
-function getErrorMessage(error: unknown, fallback: string): string {
-    return (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (error instanceof Error ? error.message : null) || fallback;
-}
-function getHttpStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } }).response?.status;
-}
 function isFresh(value: string | null): boolean {
     const timestamp = value ? Date.parse(value) : Number.NaN;
     return Number.isFinite(timestamp) && Date.now() - timestamp < CACHE_FRESHNESS_MS;

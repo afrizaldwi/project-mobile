@@ -1,4 +1,5 @@
 import type { InvoiceItem } from "@/api/invoice";
+import { formatRupiah } from "@/utils/format";
 
 export class InvoicePdfFactory {
     static generateHtml(invoice: InvoiceItem): string {
@@ -10,11 +11,6 @@ export class InvoicePdfFactory {
                 month: "long",
                 year: "numeric"
             });
-        };
-
-        const formatRupiah = (amount?: number) => {
-            if (amount === undefined) return "Rp 0";
-            return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
         };
 
         return `

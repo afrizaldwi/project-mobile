@@ -13,6 +13,7 @@ import {
     View
 } from "react-native";
 
+import { getErrorMessage as getApiErrorMessage } from "@/utils/apiErrors";
 import { profileService } from "@/api/profileService";
 import { useAuth } from "@/auth/AuthContext";
 import { deleteCachedUser, deleteToken } from "@/auth/tokenStorage";
@@ -76,10 +77,7 @@ function getFieldError(error: unknown): PasswordErrors {
     ) as PasswordErrors;
 }
 
-function getErrorMessage(error: unknown, fallback: string) {
-    const data = (error as { response?: { data?: ValidationErrorResponse } })?.response?.data;
-    return data?.message || (error instanceof Error ? error.message : null) || fallback;
-}
+const getErrorMessage = getApiErrorMessage;
 
 function InfoRow({ label, value }: { label: string; value: unknown }) {
     return (

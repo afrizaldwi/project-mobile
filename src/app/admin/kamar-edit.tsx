@@ -19,13 +19,8 @@ import { formatTanggal, getImageUrl, getKamarById, updateKamar } from "@/api/kam
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { markKamarCacheDirty } from "@/database/kamarRepository";
 import type { FotoPayload, KamarPayload, KamarStatus } from "@/types/kamar";
+import { KAMAR_STATUS_OPTIONS } from "@/types/kamar";
 import { imageAssetToUploadFile } from "@/utils/uploadFile";
-
-const STATUS_OPTIONS: { label: string; value: KamarStatus; color: string }[] = [
-    { label: "Tersedia", value: "tersedia", color: "#16a34a" },
-    { label: "Terisi", value: "terisi", color: "#dc2626" },
-    { label: "Perbaikan", value: "perbaikan", color: "#d97706" },
-];
 
 export default function KamarEditScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -101,27 +96,40 @@ export default function KamarEditScreen() {
             Alert.alert("Validasi", "Harga harus berupa angka yang valid.");
             return;
         }
-        const payload: KamarPayload = {
-            nomor_kamar: nomorKamar.trim(),
-            luas_kamar: luasKamar.trim(),
-            fasilitas: fasilitas.trim(),
-            harga_bulanan: hargaValue,
-            status_kamar: status,
-            ...(foto ? { foto_kamar: foto } : {}),
-        };
-        try {
-            setSaving(true);
-            await updateKamar(kamarId, payload);
-            await markKamarCacheDirty(db);
-            Alert.alert("Berhasil", "Data kamar berhasil diperbarui.", [
-                { text: "OK", onPress: () => router.back() },
-            ]);
-        } catch (e: any) {
-            const msg = e?.response?.data?.message ?? "Gagal menyimpan perubahan. Coba lagi.";
-            Alert.alert("Error", msg);
-        } finally {
-            setSaving(false);
-        }
+
+        Alert.alert(
+            "Konfirmasi",
+            "Apakah Anda yakin ingin menyimpan perubahan kamar ini?",
+            [
+                { text: "Batal", style: "cancel" },
+                {
+                    text: "Simpan",
+                    onPress: async () => {
+                        const payload: KamarPayload = {
+                            nomor_kamar: nomorKamar.trim(),
+                            luas_kamar: luasKamar.trim(),
+                            fasilitas: fasilitas.trim(),
+                            harga_bulanan: hargaValue,
+                            status_kamar: status,
+                            ...(foto ? { foto_kamar: foto } : {}),
+                        };
+                        try {
+                            setSaving(true);
+                            await updateKamar(kamarId, payload);
+                            await markKamarCacheDirty(db);
+                            Alert.alert("Berhasil", "Data kamar berhasil diperbarui.", [
+                                { text: "OK", onPress: () => router.back() },
+                            ]);
+                        } catch (e: any) {
+                            const msg = e?.response?.data?.message ?? "Gagal menyimpan perubahan. Coba lagi.";
+                            Alert.alert("Error", msg);
+                        } finally {
+                            setSaving(false);
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     if (loadingData) {
@@ -226,7 +234,7 @@ export default function KamarEditScreen() {
                                 Status Kamar <Text className="text-red-500">*</Text>
                             </Text>
                             <View className="flex-row gap-2">
-                                {STATUS_OPTIONS.map((opt) => (
+                                {KAMAR_STATUS_OPTIONS.map((opt) => (
                                     <Pressable
                                         key={opt.value}
                                         onPress={() => setStatus(opt.value)}
