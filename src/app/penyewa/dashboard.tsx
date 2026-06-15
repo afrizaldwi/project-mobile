@@ -1,8 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
     RefreshControl,
     ScrollView,
     Text,
@@ -10,11 +8,16 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/auth/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { syncPenyewaDashboard } from "@/database/dashboardSync";
 import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
 import type { PenyewaDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardMessage } from "@/components/dashboard/DashboardMessage";
+import { DashboardSummaryGrid } from "@/components/dashboard/DashboardSummaryGrid";
+import { DashboardSection } from "@/components/dashboard/DashboardSection";
+import { RecentComplaintList } from "@/components/dashboard/RecentComplaintList";
 
 const formatRupiah = (value: number | null) => {
     if (value === null || value === undefined) return "-";
@@ -34,9 +37,7 @@ const formatStatus = (value?: string | null) => {
 
 export default function PenyewaDashboardScreen() {
     return (
-        <ProtectedRoute allowedRoles={["penyewa"]}>
-            <PenyewaDashboardContent />
-        </ProtectedRoute>
+        <PenyewaDashboardContent />
     );
 }
 
@@ -100,14 +101,7 @@ function PenyewaDashboardContent() {
     };
 
     if (isLoading && !summary) {
-        return (
-            <View className="flex-1 items-center justify-center bg-light">
-                <ActivityIndicator size="large" color="#2563eb" />
-                <Text className="mt-3 text-sm font-semibold text-dark/50">
-                    Memuat dashboard...
-                </Text>
-            </View>
-        );
+        return <DashboardLoading />;
     }
 
     return (
@@ -121,53 +115,30 @@ function PenyewaDashboardContent() {
                 />
             }
         >
-            <View className="mb-5 rounded-3xl bg-primary p-5">
-                <Text className="text-xs font-bold uppercase tracking-widest text-white/70">
-                    Dashboard
-                </Text>
-                <Text className="mt-2 text-2xl font-black text-white">
-                    Halo, {user?.nama_lengkap || "Penyewa"}
-                </Text>
-                <Pressable
-                    onPress={handleLogout}
-                    className="mt-4 self-start rounded-xl bg-white/15 px-4 py-2"
-                >
-                    <Text className="text-sm font-bold text-white">Logout</Text>
-                </Pressable>
-            </View>
+            <DashboardHeader
+                title="Dashboard"
+                userName={user?.nama_lengkap}
+                fallbackName="Penyewa"
+                onLogout={handleLogout}
+            />
 
             {errorMessage ? (
-                <View className="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-4">
-                    <Text className="text-sm font-bold text-danger">{errorMessage}</Text>
-                </View>
+                <DashboardMessage
+                    variant="error"
+                    message={errorMessage}
+                />
             ) : null}
             {notice ? (
-                <View className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4">
-                    <Text className="text-sm font-bold text-primary">{notice}</Text>
-                </View>
+                <DashboardMessage
+                    variant="notice"
+                    message={notice}
+                />
             ) : null}
 
-            <View className="flex-row flex-wrap gap-3">
-                {cards.map((card) => (
-                    <View
-                        key={card.label}
-                        className="min-h-[118px] flex-1 basis-[47%] rounded-2xl border border-gray-100 bg-white p-4"
-                    >
-                        <Text className="text-xs font-bold uppercase text-dark/40">
-                            {card.label}
-                        </Text>
-                        <Text className="mt-2 text-xl font-bold text-dark">
-                            {card.value}
-                        </Text>
-                        <Text className="mt-1 text-xs font-medium text-dark/40">
-                            {card.description}
-                        </Text>
-                    </View>
-                ))}
-            </View>
+            <DashboardSummaryGrid cards={cards} />
 
             {summary?.kamar ? (
-                <Section title="Informasi Kamar">
+                <DashboardSection title="Informasi Kamar">
                     <InfoRow label="Nomor Kamar" value={summary.kamar.nomor_kamar || "-"} />
                     <InfoRow label="Fasilitas" value={summary.kamar.fasilitas || "-"} />
                     <InfoRow
@@ -175,17 +146,17 @@ function PenyewaDashboardContent() {
                         value={formatRupiah(summary.kamar.harga_bulanan)}
                     />
                     <InfoRow label="Status" value={formatStatus(summary.kamar.status_kamar)} />
-                </Section>
+                </DashboardSection>
             ) : (
-                <Section title="Informasi Kamar">
+                <DashboardSection title="Informasi Kamar">
                     <Text className="text-sm font-medium text-dark/40">
                         Belum ada sewa aktif.
                     </Text>
-                </Section>
+                </DashboardSection>
             )}
 
             {summary?.tagihan_terbaru ? (
-                <Section title="Tagihan Terbaru">
+                <DashboardSection title="Tagihan Terbaru">
                     <InfoRow
                         label="Kode Invoice"
                         value={summary.tagihan_terbaru.kode_invoice || "-"}
@@ -202,11 +173,11 @@ function PenyewaDashboardContent() {
                         label="Status"
                         value={formatStatus(summary.tagihan_terbaru.status_tagihan)}
                     />
-                </Section>
+                </DashboardSection>
             ) : null}
 
             {summary?.kontrak ? (
-                <Section title="Masa Sewa">
+                <DashboardSection title="Masa Sewa">
                     <InfoRow label="Tanggal Masuk" value={summary.kontrak.tanggal_masuk} />
                     <InfoRow
                         label="Tanggal Keluar"
@@ -234,46 +205,16 @@ function PenyewaDashboardContent() {
                             Progress {summary.kontrak.progress_persen}%
                         </Text>
                     </View>
-                </Section>
+                </DashboardSection>
             ) : null}
 
-            <Section title="Keluhan Terakhir">
-                {!summary || summary.keluhan_terakhir.length === 0 ? (
-                    <Text className="text-sm font-medium text-dark/40">
-                        Belum ada keluhan terakhir.
-                    </Text>
-                ) : (
-                    summary.keluhan_terakhir.map((item, index) => (
-                        <View
-                            key={`${item.judul}-${index}`}
-                            className="mb-3 rounded-2xl bg-light p-4"
-                        >
-                            <Text className="font-black text-dark">{item.judul}</Text>
-                            <Text className="mt-1 text-xs font-semibold uppercase text-primary">
-                                {item.status}
-                            </Text>
-                            <Text className="mt-1 text-xs font-medium text-dark/40">
-                                {item.tanggal}
-                            </Text>
-                        </View>
-                    ))
-                )}
-            </Section>
+            <DashboardSection title="Keluhan Terakhir">
+                <RecentComplaintList
+                    items={summary?.keluhan_terakhir ?? []}
+                    emptyMessage="Belum ada keluhan terakhir."
+                />
+            </DashboardSection>
         </ScrollView>
-    );
-}
-
-type SectionProps = {
-    title: string;
-    children: React.ReactNode;
-};
-
-function Section({ title, children }: SectionProps) {
-    return (
-        <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-5">
-            <Text className="mb-4 text-lg font-black text-dark">{title}</Text>
-            {children}
-        </View>
     );
 }
 

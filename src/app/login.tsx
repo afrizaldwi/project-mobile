@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/auth/AuthContext";
+import { getHomeRoute } from "@/constants/navigation";
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -26,15 +27,7 @@ export default function LoginScreen() {
             return;
         }
 
-        if (user.role === "admin") {
-            router.replace("/admin/dashboard");
-            return;
-        }
-
-        if (user.role === "penyewa") {
-            router.replace("/penyewa/dashboard");
-            return;
-        }
+        router.replace(getHomeRoute(user.role));
     }, [isLoading, isAuthenticated, user, router]);
 
     async function handleLogin() {
@@ -48,22 +41,10 @@ export default function LoginScreen() {
         setIsSubmitting(true);
 
         try {
-            const loggedInUser = await login({
+            await login({
                 email: email.trim(),
                 password,
             });
-
-            if (loggedInUser.role === "admin") {
-                router.replace("/admin/dashboard");
-                return;
-            }
-
-            if (loggedInUser.role === "penyewa") {
-                router.replace("/penyewa/dashboard");
-                return;
-            }
-
-            setErrorMessage("Role pengguna tidak dikenali.");
         } catch (error: any) {
             console.log("LOGIN ERROR MESSAGE:", error?.message);
             console.log("LOGIN ERROR STATUS:", error?.response?.status);

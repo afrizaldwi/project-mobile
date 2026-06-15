@@ -13,7 +13,7 @@ import { Alert } from "react-native";
 
 import { setAuthSessionInactiveHandler } from "@/api/client";
 import * as authService from "@/auth/authService";
-import { deleteCachedUser, deleteToken, getCachedUser, getToken } from "@/auth/tokenStorage";
+import { clearAuthStorage, getCachedUser, getToken } from "@/auth/tokenStorage";
 import { NotificationFacade } from "@/services/NotificationFacade";
 import type { LoginPayload, User } from "@/types";
 
@@ -49,12 +49,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(nextUser);
     }, []);
 
+    const resetRuntimeSession = useCallback(() => {
+        NotificationFacade.resetNotifiedNotifications();
+        updateUser(null);
+    }, [updateUser]);
+
     useEffect(() => {
         setAuthSessionInactiveHandler((message) => {
             const hadActiveUser = activeUserRef.current !== null;
 
-            NotificationFacade.resetNotifiedNotifications();
-            updateUser(null);
+            resetRuntimeSession();
 
             if (!initialRestoreCompletedRef.current || !hadActiveUser) {
                 return;
@@ -76,7 +80,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
 
         return () => setAuthSessionInactiveHandler(null);
-    }, [updateUser]);
+    }, [resetRuntimeSession]);
 
     const refreshUser = useCallback(async () => {
         setIsLoading(true);
@@ -85,8 +89,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const token = await getToken();
 
             if (!token) {
-                updateUser(null);
-                NotificationFacade.resetNotifiedNotifications();
+                resetRuntimeSession();
                 return;
             }
 
@@ -95,10 +98,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } catch (error) {
             const status = getHttpStatus(error);
             if (status === 401 || status === 403) {
-                await deleteToken();
-                await deleteCachedUser();
-                updateUser(null);
-                NotificationFacade.resetNotifiedNotifications();
+                await clearAuthStorage();
+                resetRuntimeSession();
                 return;
             }
 
@@ -107,7 +108,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             initialRestoreCompletedRef.current = true;
             setIsLoading(false);
         }
-    }, [updateUser]);
+    }, [resetRuntimeSession, updateUser]);
 
     const login = useCallback(async (payload: LoginPayload) => {
         const loggedInUser = await authService.login(payload);
@@ -124,9 +125,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const logout = useCallback(async () => {
         await authService.logout();
-        NotificationFacade.resetNotifiedNotifications();
-        updateUser(null);
-    }, [updateUser]);
+        resetRuntimeSession();
+    }, [resetRuntimeSession]);
 
     useEffect(() => {
         if (initialRestoreStartedRef.current) {

@@ -1,6 +1,6 @@
 import { create, type InternalAxiosRequestConfig } from "axios";
 
-import { deleteCachedUser, deleteToken, getToken } from "@/auth/tokenStorage";
+import { clearAuthStorage, getToken } from "@/auth/tokenStorage";
 import { API_BASE_URL } from "@/constants/env";
 
 type MultipartFieldDebug = {
@@ -161,8 +161,7 @@ async function endCurrentSession(
       return;
     }
 
-    await deleteToken();
-    await deleteCachedUser();
+    await clearAuthStorage();
     await authSessionInactiveHandler?.(message);
   })();
 

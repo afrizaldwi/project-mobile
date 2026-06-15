@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { useAuth } from "@/auth/AuthContext";
 import { ListLoadingView } from "@/components/common/ListLoadingView";
 import { hasSeenWelcome } from "@/storage/welcomePreference";
+import { getHomeRoute } from "@/constants/navigation";
 
 export default function IndexScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -62,13 +63,9 @@ export default function IndexScreen() {
     return <Redirect href="/login" />;
   }
 
-  if (user?.role === "admin") {
-    return <Redirect href="/admin/dashboard" />;
+  if (!user) {
+    return <Redirect href="/login" />;
   }
 
-  if (user?.role === "penyewa") {
-    return <Redirect href="/penyewa/dashboard" />;
-  }
-
-  return <Redirect href="/login" />;
+  return <Redirect href={getHomeRoute(user.role)} />;
 }

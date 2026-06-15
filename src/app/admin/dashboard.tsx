@@ -1,8 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
     RefreshControl,
     ScrollView,
     Text,
@@ -10,11 +8,16 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/auth/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { syncAdminDashboard } from "@/database/dashboardSync";
 import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
 import type { AdminDashboardSummary } from "@/types/dashboard";
 import { useSQLiteContext } from "expo-sqlite";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardMessage } from "@/components/dashboard/DashboardMessage";
+import { DashboardSummaryGrid } from "@/components/dashboard/DashboardSummaryGrid";
+import { DashboardSection } from "@/components/dashboard/DashboardSection";
+import { RecentComplaintList } from "@/components/dashboard/RecentComplaintList";
 
 const formatNumber = (value: number) => {
     return new Intl.NumberFormat("id-ID").format(value || 0);
@@ -30,9 +33,7 @@ const formatRupiah = (value: number) => {
 
 export default function AdminDashboardScreen() {
     return (
-        <ProtectedRoute allowedRoles={["admin"]}>
-            <AdminDashboardContent />
-        </ProtectedRoute>
+        <AdminDashboardContent />
     );
 }
 
@@ -91,14 +92,7 @@ function AdminDashboardContent() {
     };
 
     if (isLoading && !summary) {
-        return (
-            <View className="flex-1 items-center justify-center bg-light">
-                <ActivityIndicator size="large" color="#2563eb" />
-                <Text className="mt-3 text-sm font-semibold text-dark/50">
-                    Memuat dashboard...
-                </Text>
-            </View>
-        );
+        return <DashboardLoading />;
     }
 
     return (
@@ -112,54 +106,34 @@ function AdminDashboardContent() {
                 />
             }
         >
-            <View className="mb-5 rounded-3xl bg-primary p-5">
-                <Text className="text-xs font-bold uppercase tracking-widest text-white/70">
-                    Admin Dashboard
-                </Text>
-                <Text className="mt-2 text-2xl font-black text-white">
-                    Halo, {user?.nama_lengkap || "Admin"}
-                </Text>
-                <Pressable
-                    onPress={handleLogout}
-                    className="mt-4 self-start rounded-xl bg-white/15 px-4 py-2"
-                >
-                    <Text className="text-sm font-bold text-white">Logout</Text>
-                </Pressable>
-            </View>
+            <DashboardHeader
+                title="Admin Dashboard"
+                userName={user?.nama_lengkap}
+                fallbackName="Admin"
+                onLogout={handleLogout}
+            />
 
             {errorMessage ? (
-                <View className="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-4">
-                    <Text className="text-sm font-bold text-danger">{errorMessage}</Text>
-                </View>
+                <DashboardMessage
+                    variant="error"
+                    message={errorMessage}
+                />
             ) : null}
             {notice ? (
-                <View className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4">
-                    <Text className="text-sm font-bold text-primary">{notice}</Text>
-                </View>
+                <DashboardMessage
+                    variant="notice"
+                    message={notice}
+                />
             ) : null}
 
-            <View className="flex-row flex-wrap gap-3">
-                {cards.map((card) => (
-                    <View
-                        key={card.label}
-                        className="min-h-[118px] flex-1 basis-[47%] rounded-2xl border border-gray-100 bg-white p-4"
-                    >
-                        <Text className="text-xs font-bold uppercase text-dark/40">
-                            {card.label}
-                        </Text>
-                        <Text className="mt-2 text-xl font-black text-dark">
-                            {card.value}
-                        </Text>
-                        <Text className="mt-1 text-xs font-medium text-dark/40">
-                            {card.description}
-                        </Text>
-                    </View>
-                ))}
-            </View>
+            <DashboardSummaryGrid
+                cards={cards}
+                valueWeight="black"
+            />
 
             {summary ? (
                 <>
-                    <Section title="Status Kamar">
+                    <DashboardSection title="Status Kamar">
                         <MiniBarChart
                             items={[
                                 {
@@ -176,9 +150,9 @@ function AdminDashboardContent() {
                                 },
                             ]}
                         />
-                    </Section>
+                    </DashboardSection>
 
-                    <Section title="Status Tagihan">
+                    <DashboardSection title="Status Tagihan">
                         <MiniBarChart
                             items={[
                                 {
@@ -195,9 +169,9 @@ function AdminDashboardContent() {
                                 },
                             ]}
                         />
-                    </Section>
+                    </DashboardSection>
 
-                    <Section title="Status Keluhan">
+                    <DashboardSection title="Status Keluhan">
                         <MiniBarChart
                             items={[
                                 {
@@ -214,50 +188,19 @@ function AdminDashboardContent() {
                                 },
                             ]}
                         />
-                    </Section>
+                    </DashboardSection>
 
-                    <Section title="Keluhan Terbaru">
-                        {summary.recent_keluhan.length === 0 ? (
-                            <Text className="text-sm font-medium text-dark/40">
-                                Belum ada keluhan terbaru.
-                            </Text>
-                        ) : (
-                            summary.recent_keluhan.map((item, index) => (
-                                <View
-                                    key={`${item.judul}-${index}`}
-                                    className="mb-3 rounded-2xl bg-light p-4"
-                                >
-                                    <Text className="font-black text-dark">{item.judul}</Text>
-                                    <Text className="mt-1 text-xs font-semibold uppercase text-primary">
-                                        {item.status}
-                                    </Text>
-                                    <Text className="mt-1 text-xs font-medium text-dark/40">
-                                        {item.tanggal}
-                                    </Text>
-                                </View>
-                            ))
-                        )}
-                    </Section>
+                    <DashboardSection title="Keluhan Terbaru">
+                        <RecentComplaintList
+                            items={summary.recent_keluhan}
+                            emptyMessage="Belum ada keluhan terbaru."
+                        />
+                    </DashboardSection>
                 </>
             ) : null}
         </ScrollView>
     );
 }
-
-type SectionProps = {
-    title: string;
-    children: React.ReactNode;
-};
-
-function Section({ title, children }: SectionProps) {
-    return (
-        <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-5">
-            <Text className="mb-4 text-lg font-black text-dark">{title}</Text>
-            {children}
-        </View>
-    );
-}
-
 type ChartItem = {
     label: string;
     value: number;
